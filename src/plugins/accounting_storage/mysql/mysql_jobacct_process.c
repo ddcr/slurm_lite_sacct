@@ -1006,6 +1006,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 	   since we could update the start/end time.
 	*/
 	if(job_cond && job_cond->used_nodes) {
+		debug4("DDCR: entering setup_cluster_list_with_inx");
 		local_cluster_list = setup_cluster_list_with_inx(
 			mysql_conn, job_cond, (void **)&curr_cluster);
 		if(!local_cluster_list) {
@@ -1143,7 +1144,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		xstrcat(query, " order by t1.cluster, submit desc");
 #endif
 	debug3("%d(%d) query\n%s", mysql_conn->conn, __LINE__, query);
-	debug3("DDCR: Change this line (%d)", __LINE__);
+	// debug3("DDCR: Change this line (%d)", __LINE__);
 
 	// debug("DDCR> pause ... Enter character:");
 	// c = getchar();
@@ -1195,8 +1196,11 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		   we are looking for */
 		if(!good_nodes_from_inx(local_cluster_list,
 					(void **)&curr_cluster,
-					row[JOB_REQ_NODE_INX], submit))
+					row[JOB_REQ_NODE_INX], submit)){
+			debug4("DDCR: No good_nodes_from_inx: %s", row[JOB_REQ_NODE_INX]);
 			continue;
+		}
+			// continue;
 #endif
 
 		job = create_jobacct_job_rec();
@@ -1218,6 +1222,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		job->associd = atoi(row[JOB_REQ_ASSOCID]);
 		job->resvid = atoi(row[JOB_REQ_RESVID]);
 
+		// ======================================
 		continue;
 
 		/* we want a blank wckey if the name is null */

@@ -1,0 +1,10 @@
+slurm_lite_sacct.sublime-project
+slurm_lite_sacct.sublime-workspace
+# C/C++
+*.so
+*.la
+*.a
+*.o
+*.lo
+*.exe
+.libs
