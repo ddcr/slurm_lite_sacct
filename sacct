@@ -1,0 +1,9 @@
+#!/bin/sh
+
+#  Find the full pathname and name of this script.
+Script="${0}"
+ProgramName=`basename "${0}"`
+
+export SLURM_CONF=$PWD/etc/slurm/slurm.conf
+
+"${Script}.exe" "$@"

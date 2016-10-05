@@ -1,0 +1,7 @@
+Check if there are jobs in database that are running forever.
+See last routine of /src/common/slurm_accounting_storage.c.
+One problem is the possible existence of old jobs stuck in the 
+database, that are no longer running on the cluster (most likely 
+due to a power outage that forcefully stopped the whole cluster).
+"The solution is to manually modify the job record in mysql to change 
+its state from 1 to 3 and update time_end to something reasonable."?
