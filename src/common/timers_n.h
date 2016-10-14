@@ -6,11 +6,11 @@
 #define DEF_TIMERS_DDCR	struct timeval tv1, tv2; char tv_str[20] = ""; long delta_t;
 #define START_TIMER_DDCR	gettimeofday(&tv1, NULL)
 #define END_TIMER_DDCR	gettimeofday(&tv2, NULL); \
-	slurm_diff_tv_str_ddcr(&tv1, &tv2, tv_str, 20, NULL, 0, &delta_t)
+	slurm_diff_tv_str_ddcr(&tv1, &tv2, tv_str, 50, NULL, 0, &delta_t)
 #define END_TIMER2_DDCR(from) gettimeofday(&tv2, NULL); \
-	slurm_diff_tv_str_ddcr(&tv1, &tv2, tv_str, 20, from, 0, &delta_t)
+	slurm_diff_tv_str_ddcr(&tv1, &tv2, tv_str, 50, from, 0, &delta_t)
 #define END_TIMER3_DDCR(from, limit) gettimeofday(&tv2, NULL); \
-	slurm_diff_tv_str_ddcr(&tv1, &tv2, tv_str, 20, from, limit, &delta_t)
+	slurm_diff_tv_str_ddcr(&tv1, &tv2, tv_str, 50, from, limit, &delta_t)
 #define DELTA_TIMER_DDCR	delta_t
 #define TIME_STR_DDCR 	tv_str
 

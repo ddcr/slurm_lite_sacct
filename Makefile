@@ -59,11 +59,10 @@ sacct$(EXEEXT): config.h $(BUILDDIRS) $(sacct_OBJECTS) $(sacct_DEPENDENCIES)
 	@rm -f sacct$(EXEEXT)
 	$(sacct_LINK) $(sacct_OBJECTS) $(sacct_LDADD) $(LIBS)
 
-plugin: NEW=0
+plugin: NEW=1
 plugin: config.h
 	$(MAKE) -C src/plugins/accounting_storage/mysql clean
 	$(MAKE) -C src/plugins/accounting_storage/mysql install
-	@rm -f config.h
 
 test_memory_issues: config.h test_memory_issues.o src/api/libslurm.o
 	@rm -f $@$(EXEEXT)
@@ -73,6 +72,9 @@ test_memory_issues: config.h test_memory_issues.o src/api/libslurm.o
 test_memory_issues.c.o:
 	$(CC) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $@
 
+# force rebuilding of config.h even if it exists
+config.h: .FORCE
+.FORCE:
 config.h: config.h.in
 	if test "$(NEW)" == "1"; then \
 		sed 's/\/\* \#undef NEWQUERY \*\//#define NEWQUERY 1/' config.h.in \
@@ -94,3 +96,4 @@ $(CLEANDIRS):
 .PHONY: subdirs $(INSTALLDIRS)
 .PHONY: subdirs $(CLEANDIRS)
 .PHONY: all clean
+.PHONY: .FORCE

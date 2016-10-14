@@ -3,9 +3,10 @@
 #'2013-05-01T00:00:00', '2013-05-31T23:59:59'
 
 starttime="2011-05-31T00:00:00"
-# starttime="2013-01-01T00:00:00"
-# endtime="2013-01-31T23:59:59"
 endtime="now"
+
+# starttime="2013-01-01T00:00:00"
+# endtime="2013-04-31T23:59:59"
 
 # Parse arguments
 while [ $# -gt 0 ]; do
