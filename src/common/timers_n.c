@@ -4,6 +4,8 @@
 #include "src/common/log.h"
 #include "src/common/slurm_time.h"
 
+#include "src/common/parse_time.h"
+
 /*
  * slurm_diff_tv_str - build a string showing the time difference between two
  *		       times
@@ -24,7 +26,8 @@ extern void slurm_diff_tv_str_ddcr(struct timeval *tv1, struct timeval *tv2,
 	(*delta_t)  = (tv2->tv_sec - tv1->tv_sec) * 1000000;
 	(*delta_t) += tv2->tv_usec;
 	(*delta_t) -= tv1->tv_usec;
-	snprintf(tv_str, len_tv_str, "usec=%ld", *delta_t);
+
+	snprintf(tv_str, len_tv_str, "usec=%ld", *delta_t); 
 	if (from) {
 		if (!limit) {
 			/* NOTE: The slurmctld scheduler's default run time
