@@ -4,6 +4,7 @@
 #include "src/common/timers_n.h"
 #include "mysql_jobacct_process.h"
 #include <fcntl.h>
+#include "src/common/slurm_protocol_defs.h"
 
 #define JOB_STATE_BASE	0x000000ff
 
@@ -1267,8 +1268,6 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		/* below is the calculation of job->elapsed   13 */
 		if(job_cond && !job_cond->without_usage_truncation
 		   && job_cond->usage_start) {
-			/* test> this branch is never reached */
-			debug("JOBID=%d: manage to enter this branch\n", curr_id);
 			if(job->start && (job->start < job_cond->usage_start))
 				job->start = job_cond->usage_start;
 
@@ -1327,8 +1326,9 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 						(local_end - local_start);
 				}
 				mysql_free_result(result2);
-
 			}
+			/* test> seems this branch is never reached */
+			debug("JOBID=%d: manage to enter this branch\n", curr_id);
 		} else {
 			job->suspended = atoi(row[JOB_REQ_SUSPENDED]);
 #ifdef NEWQUERY
@@ -1378,7 +1378,6 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		/* If I am looking for specific steps */
 		if(job_cond && job_cond->step_list
 		   && list_count(job_cond->step_list)) {
-		   	debug4("DDCR: entrei aqiu\n");
 			set = 0;
 			itr = list_iterator_create(job_cond->step_list);
 			while((selected_step = list_next(itr))) {
@@ -1416,14 +1415,16 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			list_iterator_destroy(itr);
 			if(set)
 				xstrcat(extra, ")");
+		   	info("DDCR: Step list was specified\n");
+		   	debug3("%d(%d) extra for step job query\n%s", mysql_conn->conn, __LINE__, extra);
 		}
 
 		/* 
 			DDCR:
-			In recent versions of SLUM the buildup of string *tmp
-			below is done outside the main while loop
+			In recent SLURM versions the buildup of the `*tmp` string
+			(see below) is done outside the main while loop
 		 */
-		/* build query string for jobsteps */
+		/* build query string for job steps */
 		for(i=0; i<STEP_REQ_COUNT; i++) {
 			if(i) 
 				xstrcat(tmp, ", ");
@@ -1456,7 +1457,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		   doing only 1 query and then matching the steps up
 		   later with the job.
 		*/
-		// info("NOTE:========== new job %s [%u] ==========\n", id, curr_id);
+		// info("NOTE:========== new job (db_indx=%s [SLURM ID=%u]) ==========\n", id, curr_id);
 		while ((step_row = mysql_fetch_row(step_result))) {
 			/* check the bitmap to see if this is one of the steps
 			   we are looking for */
@@ -1490,6 +1491,39 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			step->start = atoi(step_row[STEP_REQ_START]);
 
 			step->end = atoi(step_row[STEP_REQ_END]);
+
+			// NOTE: CORRECTIONS ACCORDING TO fix_sacct_db.pl
+			if(!step->start)
+				debug4("step %u.%u: time_start=%d",
+					job->jobid, step->stepid, step->start);
+
+			/* assume step->start is nonzero */
+			if(!step->end) {
+				query =	xstrdup_printf(
+					"UPDATE %s SET end=%d "
+					"where id=%s and stepid=%u",
+					step_table, step->start,
+					id, step->stepid);
+				debug4("step %u.%u: time_end=%d\n\t %s", 
+					job->jobid, 
+					step->stepid,
+					step->end, 
+					query);
+				xfree(query);
+			}
+
+			if (!step->start & !step->end)
+				debug4("step %u.%u: time_start=%d, time_end=%d",
+					job->jobid, step->stepid,
+					step->start, step->end);
+
+			// NOTE: FIX STEP STATE
+			// if (step->state == JOB_PENDING || step->state == JOB_RUNNING ) {
+			// 	debug4('%s: time_start=%d, time_end=%d', 
+			// 			job_state_string(step->state),
+			// 			step->start, step->end);
+			// }
+
 			/* if the job has ended end the step also */
 			if(!step->end && job_ended) {
 				step->end = job->end;
@@ -1632,17 +1666,6 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 	 			     step->user_cpu_sec,
 	 			     step->sys_cpu_sec); 
 */
-			// NOTE: correct step start/end times
-			if(!step->start)
-				info('step %u.%u: time_start=%d',
-					job->jobid, step->stepid,
-					step->start)
-
-			if(!step->end) {
-				query =	xstrdup_printf("UPDATE %s SET end=%d where id=%s",
-						       tmp, step_table, id);
-
-			}
 		}
 		mysql_free_result(step_result);
 
