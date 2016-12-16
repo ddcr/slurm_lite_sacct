@@ -2,11 +2,11 @@
 #
 #'2013-05-01T00:00:00', '2013-05-31T23:59:59'
 
-starttime="2011-05-31T00:00:00"
-endtime="now"
+# starttime="2011-05-31T00:00:00"
+# endtime="now"
 
-# starttime="2013-01-01T00:00:00"
-# endtime="2013-04-31T23:59:59"
+starttime="2013-01-01T00:00:00"
+endtime="2013-02-31T23:59:59"
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -34,7 +34,7 @@ echo "endtime=$endtime"
 	--noheader \
 	--allocations \
 	--clusters veredas \
-	--format=jobid,cluster,partition,account,group,gid,user,uid,submit,eligible,start,end,elapsed,exitcode,state,nnodes,ncpus,reqcpus,timelimit,nodelist,jobname \
+	--format=jobid,jobidraw,cluster,partition,account,group,gid,user,uid,submit,eligible,start,end,elapsed,exitcode,state,nnodes,ncpus,reqcpus,reqmem,timelimit,nodelist,jobname \
 	--state=CA,CD,F,NF,TO \
 	--starttime $starttime \
 	--endtime $endtime

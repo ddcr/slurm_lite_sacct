@@ -29,7 +29,7 @@ COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
 sacct_LDFLAGS = -export-dynamic $(CMD_LDFLAGS)
 sacct_LINK = $(CCLD) $(CFLAGS) $(sacct_LDFLAGS) \
 	$(LDFLAGS) -o $@
-sacct_LDADD = src/api/libslurm.o -ldl
+sacct_LDADD = compat_pwdgrp.$(OBJEXT) src/api/libslurm.o -ldl
 
 EXEEXT = .exe
 OBJEXT = o
@@ -38,7 +38,7 @@ LIBS =
 .SUFFIXES:
 .SUFFIXES: .c .lo .o .obj
 
-sacct_DEPENDENCIES = src/api/libslurm.o
+sacct_DEPENDENCIES = compat_pwdgrp.$(OBJEXT) src/api/libslurm.o
 sacct_OBJECTS = sacct.$(OBJEXT) process.$(OBJEXT) print.$(OBJEXT) \
 	options.$(OBJEXT)
 
@@ -70,6 +70,17 @@ test_memory_issues: config.h test_memory_issues.o src/api/libslurm.o
 	src/api/libslurm.o -ldl
 
 test_memory_issues.c.o:
+	$(CC) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $@
+
+test_compat_pwdgrp: config.h test_compat_pwdgrp.o compat_pwdgrp.o src/api/libslurm.o
+	@rm -f $@$(EXEEXT)
+	$(CCLD) $(CFLAGS) $(LDFLAGS) -o $@$(EXEEXT) test_compat_pwdgrp.o compat_pwdgrp.o \
+	src/api/libslurm.o -ldl
+
+test_compat_pwdgrp.c.o:
+	$(CC) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $@
+
+compat_pwdgrp.c.o:
 	$(CC) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $@
 
 # force rebuilding of config.h even if it exists

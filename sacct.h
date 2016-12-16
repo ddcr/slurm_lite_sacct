@@ -71,7 +71,11 @@
 #define DEFAULT_COMP_FIELDS "jobid,uid,jobname,partition,nnodes,nodes,state,end"
 #define LONG_FIELDS "jobid,jobname,partition,maxvmsize,maxvmsizenode,maxvmsizetask,avevmsize,maxrss,maxrssnode,maxrsstask,averss,maxpages,maxpagesnode,maxpagestask,avepages,mincpu,mincpunode,mincputask,avecpu,ntasks,alloccpus,elapsed,state,exitcode"
 
+#ifdef NEWQUERY
+#define LONG_COMP_FIELDS "jobid,jobidraw,uid,jobname,partition,nnodes,nodes,state,start,end,timelimit"
+#else
 #define LONG_COMP_FIELDS "jobid,uid,jobname,partition,nnodes,nodes,state,start,end,timelimit"
+#endif
 
 #define BUFFER_SIZE 4096
 #define STATE_COUNT 10
@@ -111,6 +115,9 @@ typedef enum {
 		PRINT_GID,
 		PRINT_GROUP,
 		PRINT_JOBID,
+#ifdef NEWQUERY
+		PRINT_JOBIDRAW,
+#endif
 		PRINT_JOBNAME,
 		PRINT_LAYOUT,
 		PRINT_MAXPAGES,
@@ -132,6 +139,9 @@ typedef enum {
 		PRINT_PARTITION,
 		PRINT_QOS,
 		PRINT_QOSRAW,
+#ifdef NEWQUERY
+		PRINT_REQ_MEM,
+#endif
 		PRINT_REQ_CPUS,
 		PRINT_RESV,
 		PRINT_RESV_CPU,

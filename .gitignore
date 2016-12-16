@@ -8,3 +8,6 @@ slurm_lite_sacct.sublime-workspace
 *.lo
 *.exe
 .libs
+etc/slurm/group.veredas
+etc/slurm/passwd.veredas
+config.h

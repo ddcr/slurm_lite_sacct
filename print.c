@@ -1,6 +1,10 @@
 #include "sacct.h"
 #include "src/common/parse_time.h"
 #include "include/slurm/slurm.h"
+#ifdef NEWQUERY
+#include "src/common/slurm_protocol_api.h"
+#endif
+#include "compat_pwdgrp.h"
 
 char *_elapsed_time(long secs, long usecs);
 
@@ -12,8 +16,7 @@ char *_elapsed_time(long secs, long usecs)
 
 	if(secs < 0 || secs == NO_VAL)
 		return NULL;
-	
-	
+
 	while (usecs >= 1E6) {
 		secs++;
 		usecs -= 1E6;
@@ -27,7 +30,7 @@ char *_elapsed_time(long secs, long usecs)
 	hours   = (secs / 3600) % 24;
 	days    =  secs / 86400;
 
-	if (days) 
+	if (days)
 		str = xstrdup_printf("%ld-%2.2ld:%2.2ld:%2.2ld",
 				     days, hours, minutes, seconds);
 	else if (hours)
@@ -47,10 +50,10 @@ static char *_find_qos_name_from_list(
 {
 	ListIterator itr = NULL;
 	acct_qos_rec_t *qos = NULL;
-	
+
 	if(!qos_list || qosid == NO_VAL)
 		return NULL;
-	
+
 	itr = list_iterator_create(qos_list);
 	while((qos = list_next(itr))) {
 		if(qosid == qos->id)
@@ -76,19 +79,22 @@ void print_fields(type_t type, void *object)
 	struct passwd *pw = NULL;
 	struct	group *gr = NULL;
 	char outbuf[FORMAT_STRING_SIZE];
-	
+#ifdef NEWQUERY
+	uint32_t tmp_uint32 = NO_VAL;
+#endif
+
 	switch(type) {
 	case JOB:
 		step = NULL;
-		if(!job->track_steps) 
+		if(!job->track_steps)
 			step = (jobacct_step_rec_t *)job->first_step_ptr;
 		/* set this to avoid printing out info for things that
 		   don't mean anything.  Like an allocation that never
 		   ran anything.
 		*/
-		if(!step) 
-			job->track_steps = 1;		
-		
+		if(!step)
+			job->track_steps = 1;
+
 		break;
 	default:
 		break;
@@ -105,7 +111,7 @@ void print_fields(type_t type, void *object)
 			case JOB:
 				tmp_int = job->alloc_cpus;
 				// we want to use the step info
-				if(!step) 
+				if(!step)
 					break;
 			case JOBSTEP:
 				tmp_int = step->ncpus;
@@ -156,7 +162,7 @@ void print_fields(type_t type, void *object)
 		case PRINT_AVECPU:
 			switch(type) {
 			case JOB:
-				if(!job->track_steps) 
+				if(!job->track_steps)
 					tmp_int = job->sacct.ave_cpu;
 				break;
 			case JOBSTEP:
@@ -167,7 +173,7 @@ void print_fields(type_t type, void *object)
 				break;
 			}
 			tmp_char = _elapsed_time((int)tmp_int, 0);
-			
+
 			field->print_routine(field,
 					     tmp_char,
 					     (curr_inx == field_count));
@@ -190,7 +196,7 @@ void print_fields(type_t type, void *object)
 				convert_num_unit((float)tmp_int,
 						 outbuf, sizeof(outbuf),
 						 UNIT_KILO);
-			
+
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -212,7 +218,7 @@ void print_fields(type_t type, void *object)
 				convert_num_unit((float)tmp_int,
 						 outbuf, sizeof(outbuf),
 						 UNIT_KILO);
-			
+
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -234,7 +240,7 @@ void print_fields(type_t type, void *object)
 				convert_num_unit((float)tmp_int,
 						 outbuf, sizeof(outbuf),
 						 UNIT_KILO);
-			
+
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -315,7 +321,7 @@ void print_fields(type_t type, void *object)
 				tmp_int = step->elapsed;
 				break;
 			case JOBCOMP:
-				tmp_int = job_comp->end_time 
+				tmp_int = job_comp->end_time
 					- job_comp->start_time;
 				break;
 			default:
@@ -378,7 +384,7 @@ void print_fields(type_t type, void *object)
 			}
 			if (WIFSIGNALED(tmp_int))
 				tmp_int2 = WTERMSIG(tmp_int);
-			
+
 			snprintf(outbuf, sizeof(outbuf), "%d:%d",
 				 WEXITSTATUS(tmp_int), tmp_int2);
 
@@ -421,7 +427,8 @@ void print_fields(type_t type, void *object)
 				break;
 			}
 			tmp_char = NULL;
-			if ((gr=getgrgid(tmp_int)))
+			// if ((gr=getgrgid(tmp_int)))
+			if ((gr=compat_getgrgid(tmp_int)))
 				tmp_char=gr->gr_name;
 
 			field->print_routine(field,
@@ -429,6 +436,10 @@ void print_fields(type_t type, void *object)
 					     (curr_inx == field_count));
 			break;
 		case PRINT_JOBID:
+#ifdef NEWQUERY
+		/* repeat here */
+		case PRINT_JOBIDRAW:
+#endif
 			switch(type) {
 			case JOB:
 				tmp_char = xstrdup_printf("%u", job->jobid);
@@ -474,7 +485,7 @@ void print_fields(type_t type, void *object)
 			case JOB:
 				/* below really should be step.  It is
 				   not a typo */
-				if(!job->track_steps) 
+				if(!job->track_steps)
 					tmp_char = slurm_step_layout_type_name(
 						step->task_dist);
 				break;
@@ -509,7 +520,7 @@ void print_fields(type_t type, void *object)
 				convert_num_unit((float)tmp_int,
 						 outbuf, sizeof(outbuf),
 						 UNIT_KILO);
-			
+
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -541,7 +552,7 @@ void print_fields(type_t type, void *object)
 			switch(type) {
 			case JOB:
 				if(!job->track_steps)
-					tmp_int = 
+					tmp_int =
 						job->sacct.max_pages_id.taskid;
 				break;
 			case JOBSTEP:
@@ -573,7 +584,7 @@ void print_fields(type_t type, void *object)
 				convert_num_unit((float)tmp_int,
 						 outbuf, sizeof(outbuf),
 						 UNIT_KILO);
-			
+
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -637,7 +648,7 @@ void print_fields(type_t type, void *object)
 				convert_num_unit((float)tmp_int,
 						 outbuf, sizeof(outbuf),
 						 UNIT_KILO);
-			
+
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -779,13 +790,13 @@ void print_fields(type_t type, void *object)
 			default:
 				break;
 			}
-			
+
 			if(!tmp_int) {
 				hostlist_t hl = hostlist_create(tmp_char);
 				tmp_int = hostlist_count(hl);
 				hostlist_destroy(hl);
 			}
-			convert_num_unit((float)tmp_int, 
+			convert_num_unit((float)tmp_int,
 					 outbuf, sizeof(outbuf), UNIT_NONE);
 			field->print_routine(field,
 					     outbuf,
@@ -797,7 +808,7 @@ void print_fields(type_t type, void *object)
 				if(!job->track_steps && !step)
 					tmp_int = job->alloc_cpus;
 				// we want to use the step info
-				if(!step) 
+				if(!step)
 					break;
 			case JOBSTEP:
 				tmp_int = step->ntasks;
@@ -864,10 +875,10 @@ void print_fields(type_t type, void *object)
 
 				break;
 			}
-			if(!qos_list) 
+			if(!qos_list)
 				qos_list = acct_storage_g_get_qos(
 					acct_db_conn, getuid(), NULL);
-		
+
 			tmp_char = _find_qos_name_from_list(qos_list,
 							    tmp_int);
 			field->print_routine(field,
@@ -893,6 +904,41 @@ void print_fields(type_t type, void *object)
 					     tmp_int,
 					     (curr_inx == field_count));
 			break;
+#ifdef NEWQUERY
+		/* I am going to assume the default min_per_cpu from slurm.conf
+		 * I suspect that only very few jobs requested explicitly
+		 *  memory constraints */
+		case PRINT_REQ_MEM:
+			switch(type) {
+			case JOB:
+			case JOBSTEP:
+				tmp_uint32 = slurm_get_def_mem_per_task();
+				break;
+			case JOBCOMP:
+				break;
+			default:
+				tmp_uint32 = NO_VAL;
+				break;
+			}
+			if (tmp_uint32 != (uint32_t)NO_VAL) {
+				bool per_cpu = false;
+				if (tmp_uint32 & MEM_PER_CPU) {
+					tmp_uint32 &= (~MEM_PER_CPU);
+					per_cpu = true;
+				}
+				convert_num_unit((float)tmp_uint32,
+						 outbuf, sizeof(outbuf),
+						 UNIT_MEGA);
+				if (per_cpu)
+					sprintf(outbuf+strlen(outbuf), "c");
+				else
+					sprintf(outbuf+strlen(outbuf), "n");
+			}
+			field->print_routine(field,
+					     outbuf,
+					     (curr_inx == field_count));
+			break;
+#endif
 		case PRINT_REQ_CPUS:
 			switch(type) {
 			case JOB:
@@ -1015,8 +1061,8 @@ void print_fields(type_t type, void *object)
 
 				break;
 			}
-			
-			if ((tmp_int == JOB_CANCELLED) && (tmp_int2 != NO_VAL)) 
+
+			if ((tmp_int == JOB_CANCELLED) && (tmp_int2 != NO_VAL))
 				snprintf(outbuf, FORMAT_STRING_SIZE,
 					 "%s by %d",
 					 job_state_string(tmp_int),
@@ -1029,7 +1075,7 @@ void print_fields(type_t type, void *object)
 				snprintf(outbuf, FORMAT_STRING_SIZE,
 					 "%s",
 					 tmp_char);
-			
+
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -1100,7 +1146,7 @@ void print_fields(type_t type, void *object)
 		case PRINT_TIMELIMIT:
 			switch(type) {
 			case JOB:
-				
+
 				break;
 			case JOBSTEP:
 
@@ -1144,9 +1190,10 @@ void print_fields(type_t type, void *object)
 			switch(type) {
 			case JOB:
 				if(job->user) {
-					if ((pw=getpwnam(job->user)))
+					// if ((pw=getpwnam(job->user)))
+					if ((pw=compat_getpwnam(job->user)))
 						tmp_int = pw->pw_uid;
-				} else 
+				} else
 					tmp_int = job->uid;
 				break;
 			case JOBSTEP:
@@ -1158,7 +1205,7 @@ void print_fields(type_t type, void *object)
 
 				break;
 			}
-			
+
 			field->print_routine(field,
 					     tmp_int,
 					     (curr_inx == field_count));
@@ -1169,9 +1216,10 @@ void print_fields(type_t type, void *object)
 				if(job->user)
 					tmp_char = job->user;
 				else if(job->uid != -1) {
-					if ((pw=getpwuid(job->uid)))
-						tmp_char = pw->pw_name;	
-				}				
+					// if ((pw=getpwuid(job->uid)))
+					if ((pw=compat_getpwuid(job->uid)))
+						tmp_char = pw->pw_name;
+				}
 				break;
 			case JOBSTEP:
 

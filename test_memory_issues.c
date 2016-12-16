@@ -9,11 +9,13 @@ not commited to the database.
 #include <stdlib.h>
 #include "src/common/xstring.h"
 #include "src/common/proc_args.h"
-// #include <slurm/slurm.h>
+#include <slurm/slurm.h>
+
 #define NO_VAL               		(0xfffffffe)
-#define MEM_PER_CPU          		0x80000000
+#define MEM_PER_CPU          		0x80000000 /*ddcr: with 32-bit int, this val is 'unsigned int' */
 #define LONG_OPT_MEM         		0x107
 #define LONG_OPT_MEM_PER_CPU 		0x13a
+#define DEFAULT_MEM_PER_CPU         0
 #define DEFAULT_MAX_MEM_PER_CPU     0
 
 /*
@@ -31,9 +33,17 @@ veredas:
         MaxMemPerCPU not defined
         MaxMemPerNode not defined
         MaxMemPerTask not defined
+
+The last three are not defined in `veredas` so they imply
+that max_mem_per_task is equal to DEFAULT_MAX_MEM_PER_CPU
 */
-static uint32_t def_mem_per_task = 2000 |= MEM_PER_CPU;
-static uint32_t max_mem_per_task = DEFAULT_MAX_MEM_PER_CPU;
+static uint32_t def_mem_per_task = 2000;  /* default MB memory per spawned task */
+/*
+	This option is not selected in veredas cluster
+	static uint32_t def_mem_per_task = DEFAULT_MEM_PER_CPU;
+*/
+static uint32_t max_mem_per_task = DEFAULT_MAX_MEM_PER_CPU; /* maximum MB memory per spawned task */
+
 
 static struct option long_options[] = {
 	{"mem",           required_argument, 0, LONG_OPT_MEM},
@@ -44,35 +54,12 @@ static struct option long_options[] = {
 char *opt_string = ":h";
 
 /* prototypes */
-static bool _valid_job_min_mem_slurm_205(uint32_t job_min_memory);
+static bool _valid_job_min_mem_slurm_205(uint32_t);
 static void  _help(void);
 
-int _print_job_min_memory(job_info_t * job, int width, bool right_justify,
-                          char* suffix)
-{
-    char min_mem[10];
-    char tmp_char[21];
-
-    if (job == NULL)        /* Print the Header instead */
-            _print_str("MIN_MEMORY", width, right_justify, true);
-    else {
-            tmp_char[0] = '\0';
-            job->job_min_memory &= (~MEM_PER_CPU);
-            convert_num_unit((float)job->job_min_memory, min_mem, 
-                             sizeof(min_mem), UNIT_NONE);
-            strcat(tmp_char, min_mem);
-            _print_str(tmp_char, width, right_justify, true);
-    }
-
-    if (suffix)
-            printf("%s", suffix);
-    return SLURM_SUCCESS;
-}
-
 /*  routine cloned from _valid_job_min_mem(...) [job_mgr.c /SLURM 2.0.5-Bull] */
-static bool _valid_job_min_mem_slurm_205(job_min_memory)
+static bool _valid_job_min_mem_slurm_205(uint32_t job_min_memory)
 {
-	// uint32_t base_size = job_desc_msg->job_min_memory;
 	uint32_t base_size = job_min_memory;
 	// extern slurmctld_conf [src/common/read_config.h]
 	// slurm_ctl_conf_t is defined in <slurm/slurm.h>
@@ -108,20 +95,24 @@ static bool _valid_job_min_mem_slurm_205(job_min_memory)
 		else
 			cpus_per_node = node_record_table_ptr[0].cpus;
 	*/
-
 	cpus_per_node = 8;  // @author ddcr
-	if (job_desc_msg->num_procs != NO_VAL)
-		cpus_per_node = MIN(cpus_per_node, job_desc_msg->num_procs);
-	if (base_size & MEM_PER_CPU) {
-		base_size &= (~MEM_PER_CPU);
-		base_size *= cpus_per_node;
-	} else {
-		size_limit &= (~MEM_PER_CPU);
-		size_limit *= cpus_per_node;
-	}
-	if (base_size <= size_limit)
-		return true;
-	return false;
+
+	// if (job_desc_msg->num_procs != NO_VAL)
+	// 	cpus_per_node = MIN(cpus_per_node, job_desc_msg->num_procs);
+
+	// if (base_size & MEM_PER_CPU) {
+	// 	base_size &= (~MEM_PER_CPU);
+	// 	base_size *= cpus_per_node;
+	// } else {
+	// 	size_limit &= (~MEM_PER_CPU);
+	// 	size_limit *= cpus_per_node;
+	// }
+
+	// if (base_size <= size_limit)
+	// 	return true;
+
+	return true;
+	// return false;
 }
 
 static void _help(void)
@@ -160,11 +151,24 @@ static void _help(void)
 
 int main(int argc, char **argv)
 {
-	uint32_t job_min_memory;
+	uint32_t job_min_memory; /* minimum real memory per node OR
+							  * real memory per CPU | MEM_PER_CPU,
+							  * default=0 (no limit)
+							  * */
+	uint32_t num_procs;      /* number of processors required by job */
+	long job_min_memory_to_str;
 	int option_index = 0;
 	int opt_char;
+	char *mem_type;
+
 	int mem_per_cpu = -1;        /* --mem-per-cpu=n              */
-	int realmem = -1;           /*  --mem=n                      */
+	int realmem     = -1;        /*  --mem=n                      */
+
+	/* ====== INITIALIZE ====== */
+	/*	slurm_init_job_desc_msg */
+	/* ======================== */
+	job_min_memory    = NO_VAL;
+	num_procs         = NO_VAL;
 
 	optind = 0;
 	while((opt_char = getopt_long(argc, argv, opt_string,
@@ -185,7 +189,7 @@ int main(int argc, char **argv)
 			case LONG_OPT_MEM_PER_CPU:
 				mem_per_cpu = (int) str_to_bytes(optarg);
 				if (mem_per_cpu < 0) {
-					error("invalid memory constraint %s", 
+					error("invalid memory constraint %s",
 					      optarg);
 					exit(1);
 				}
@@ -197,6 +201,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	printf("choice: realmem = %d, mem_per_cpu = %d\n", realmem, mem_per_cpu);
 	if ((realmem > -1) && (mem_per_cpu > -1)) {
 		if (realmem < mem_per_cpu) {
 			info("mem < mem-per-cpu - resizing mem to be equal "
@@ -205,20 +210,23 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* ======================== */
 	/*	fill_job_desc_from_opts */
+	/* ======================== */
     if (realmem > -1)
-        // desc->job_min_memory = opt.realmem;
-        job_min_memory = realmem;
+        job_min_memory = realmem;  /* Not per CPU */
     else if (mem_per_cpu > -1)
-        // desc->job_min_memory = opt.mem_per_cpu | MEM_PER_CPU;
-        job_min_memory = mem_per_cpu | MEM_PER_CPU;
+        job_min_memory = mem_per_cpu | MEM_PER_CPU; /* marked as per CPU */
 
+
+	/* =============================================================================== */
 	/* slurmctld_req -> [_slurm_rpc_submit_batch_job | _slurm_rpc_allocate_resources |
 	                     _slurm_rpc_job_will_run] -> job_allocate ->
 						_job_create -> _validate_job_desc */
+	/* =============================================================================== */
     if (job_min_memory == NO_VAL) {
         /* Default memory limit is DefMemPerCPU (if set) or no limit */
-        job_min_memory = def_mem_per_task;
+        job_min_memory = def_mem_per_task | MEM_PER_CPU; /*from slurm.conf and mark it as per cpu*/
     } else if (!_valid_job_min_mem_slurm_205(job_min_memory)) {
         printf("ESLURM_INVALID_TASK_MEMORY\n");
         return 1;
@@ -232,22 +240,21 @@ int main(int argc, char **argv)
 	    static int _job_create(job_desc_msg_t * job_desc, int allocate, int will_run,
 		int update_job(job_desc_msg_t * job_specs, uid_t uid)
 	*/
-    // if (job_specs->job_min_memory == NO_VAL) {
-
     if (job_min_memory == NO_VAL) {
-            job_min_memory_ddcr = -1L;
+            job_min_memory_to_str = -1L;
             mem_type = "job";
     } else if (job_min_memory & MEM_PER_CPU) {
-            job_min_memory_ddcr = (long) (job_min_memory &
-                               		     (~MEM_PER_CPU));
+            job_min_memory_to_str = (long) (job_min_memory &
+                               		       (~MEM_PER_CPU));
             mem_type = "cpu";
     } else {
-            job_min_memory_ddcr = (long) job_min_memory;
+            job_min_memory_to_str = (long) job_min_memory;
             mem_type = "job";
-    printf("   min_memory_%s=%ld\n", mem_type, job_min_memory_ddcr);
+    }
+    printf("   min_memory_%s=%ld\n", mem_type, job_min_memory_to_str);
 
-	// Check routine _print_job_min_memory() above
-
+	// Check routine _print_job_min_memory()
+	// this is simple. Just print job_min_memory & (~MEM_PER_CPU)
 
 	return 0;
 }

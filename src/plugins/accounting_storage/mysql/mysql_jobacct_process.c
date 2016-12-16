@@ -1104,7 +1104,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		xstrcat(extra, ")");
 	}
 
-// 201d691 MySQL - Fix querying jobs with reservations when 
+// 201d691 MySQL - Fix querying jobs with reservations when
 // the id's have rolled.
 	query = xstrdup_printf("select %s from %s as t1 "
 			       "left join %s as t2 "
@@ -1264,14 +1264,14 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			if(!job->start || (job->start > job->end))
 				job->start = job->end;
 		}
-		
+
 		/* below is the calculation of job->elapsed   13 */
 		if(job_cond && !job_cond->without_usage_truncation
 		   && job_cond->usage_start) {
 			if(job->start && (job->start < job_cond->usage_start))
 				job->start = job_cond->usage_start;
 
-			if(!job->end || job->end > job_cond->usage_end) 
+			if(!job->end || job->end > job_cond->usage_end)
 				job->end = job_cond->usage_end;
 
 			if(!job->start)
@@ -1369,8 +1369,11 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		job->state = atoi(row[JOB_REQ_STATE]);                /* 15 */
 		job->priority = atoi(row[JOB_REQ_PRIORITY]);
 		job->req_cpus = atoi(row[JOB_REQ_REQ_CPUS]);          /* 18 */
-//job->req_gres
-//job->req_mem
+// if (row[JOB_REQ_GRES_REQ])
+//     job->req_gres = xstrdup(row[JOB_REQ_GRES_REQ]);
+// else
+//     job->req_gres = xstrdup("");
+//job->req_mem = slurm_atoul(row[JOB_REQ_REQ_MEM]);
 		job->requid = atoi(row[JOB_REQ_KILL_REQUID]);
 		job->qos = atoi(row[JOB_REQ_QOS]);
 		job->show_full = 1;
@@ -1565,7 +1568,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 				step->elapsed = 0;
 
 #ifdef NEWQUERY
-			/*NOTE: DDCR Reordered this block like in recent versions */
+			/*NOTE: DDCR Restored this block to the same ordering as in recent versions */
 			step->stepname = xstrdup(step_row[STEP_REQ_NAME]);
 			step->nodes = xstrdup(step_row[STEP_REQ_NODELIST]);
 			step->requid = atoi(step_row[STEP_REQ_KILL_REQUID]);
@@ -1660,11 +1663,11 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 #endif
 
 /*			info("got step %u.%u: %d += %d+%d",
-	 			     job->jobid, 
+	 			     job->jobid,
 	 			     step->stepid,
 	 			     step->tot_cpu_sec,
 	 			     step->user_cpu_sec,
-	 			     step->sys_cpu_sec); 
+	 			     step->sys_cpu_sec);
 */
 		}
 		mysql_free_result(step_result);
@@ -1677,10 +1680,10 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			   different.  If it is different print out
 			   the step separate.
 			*/
-			if(list_count(job->steps) > 1) 
+			if(list_count(job->steps) > 1)
 				job->track_steps = 1;
 			else if(step && step->stepname && job->jobname) {
-				if(strcmp(step->stepname, job->jobname)) 
+				if(strcmp(step->stepname, job->jobname))
 					job->track_steps = 1;
 			}
 			// info("JOBID=%d: no track_steps [%d]", curr_id,
