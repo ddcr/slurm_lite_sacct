@@ -92,6 +92,20 @@ def get_month_day_range(date_w_time):
     return first_day.isoformat(sep='T'), last_day.isoformat(sep='T')
 
 
+def get_firstweek_day_range(date_w_time):
+    first_day = date_w_time.replace(day=1,
+                                    hour=0,
+                                    minute=0,
+                                    second=0)
+    last_day = date_w_time.replace(
+        day=7,
+        hour=23,
+        minute=59,
+        second=59
+    )
+    return first_day.isoformat(sep='T'), last_day.isoformat(sep='T')
+
+
 def start_process():
     p = multiprocessing.current_process()
     print 'Starting {0} with pid = {1}'.format(p.name, p.pid)
@@ -205,9 +219,14 @@ def use_concurrent():
                 )
                 sys.exit(1)
 
-        year_range = [get_month_day_range(datetime.datetime(year=y,
-                                                            month=m,
-                                                            day=1))
+        # year_range = [get_month_day_range(datetime.datetime(year=y,
+        #                                                     month=m,
+        #                                                     day=1))
+        #               for m in range(1, 13)
+        #               ]
+        year_range = [get_firstweek_day_range(datetime.datetime(year=y,
+                                                                month=m,
+                                                                day=1))
                       for m in range(1, 13)
                       ]
         # The with statement ensures that threads are cleaned up promptly

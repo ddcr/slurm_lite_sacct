@@ -466,6 +466,10 @@ extern int setup_job_cond_limits(mysql_conn_t *mysql_conn,
 	if(!job_cond)
 		return 0;
 
+	/*
+		DDCR: as far I can tell this block is never executed when issuing
+		the command sacct, irrespective of the options which have been selected
+	 */
 	/* THIS ASSOCID CHECK ALWAYS NEEDS TO BE FIRST!!!!!!! */
 	if(job_cond->associd_list && list_count(job_cond->associd_list)) {
 		set = 0;
@@ -557,6 +561,10 @@ extern int setup_job_cond_limits(mysql_conn_t *mysql_conn,
 		xstrcat(*extra, ")");
 	}
 
+	/*
+		DDCR: as far I can tell this block is never executed when issuing
+		the command sacct, irrespective of the options which have been selected
+	 */
 	/* this must be done before resvid_list since we set
 	   resvid_list up here */
 	if(job_cond->resv_list && list_count(job_cond->resv_list)) {
@@ -584,6 +592,15 @@ extern int setup_job_cond_limits(mysql_conn_t *mysql_conn,
 
 		itr = list_iterator_create(job_cond->resv_list);
 		while((object = list_next(itr))) {
+			/*
+				DDCR: a bug arises at this point if the previous conditional statement
+					  if(job_cond->cluster_list
+						   && list_count(job_cond->cluster_list)) {
+					  	...
+					}
+					is executed, because the variable 'my_set' is set to 1 and
+					and we get this malformed query fragment ") && ( ||"
+			*/
 			if(my_set)
 				xstrcat(query, " || ");
 			xstrfmtcat(query, "name='%s'", object);
@@ -607,6 +624,9 @@ extern int setup_job_cond_limits(mysql_conn_t *mysql_conn,
 	}
 	no_resv:
 
+	/*
+	 * DDCR: this block is never executed
+	 */
 	if(job_cond->resvid_list && list_count(job_cond->resvid_list)) {
 		set = 0;
 		if(*extra)
@@ -718,7 +738,7 @@ extern int setup_job_cond_limits(mysql_conn_t *mysql_conn,
 			xstrfmtcat(*extra, "t1.state='%s'", object);
 			//=========================================================
 			//
-			// @author
+			// @author debuging
 			//
 			cur_state = (uint32_t)strtoul(object, NULL, 10);
 			base_state = cur_state & JOB_STATE_BASE;
@@ -764,7 +784,7 @@ extern int setup_job_cond_limits(mysql_conn_t *mysql_conn,
 		}
 		list_iterator_destroy(itr);
 		xstrcat(*extra, ")");
-	} 
+	}
 
 	if(job_cond->wckey_list && list_count(job_cond->wckey_list)) {
 		set = 0;
