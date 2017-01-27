@@ -81,6 +81,7 @@ void print_fields(type_t type, void *object)
 	char outbuf[FORMAT_STRING_SIZE];
 #ifdef NEWQUERY
 	uint32_t tmp_uint32 = NO_VAL;
+	char tmp1[128];
 #endif
 
 	switch(type) {
@@ -382,12 +383,23 @@ void print_fields(type_t type, void *object)
 			default:
 				break;
 			}
+#ifdef NEWQUERY
+			if (tmp_int != NO_VAL) {
+				if (WIFSIGNALED(tmp_int))
+					tmp_int2 = WTERMSIG(tmp_int);
+				tmp_int = WEXITSTATUS(tmp_int);
+				if (tmp_int >= 128)
+					tmp_int -= 128;
+			}
+			snprintf(outbuf, sizeof(outbuf), "%d:%d",
+				 tmp_int, tmp_int2);
+#else
 			if (WIFSIGNALED(tmp_int))
 				tmp_int2 = WTERMSIG(tmp_int);
 
 			snprintf(outbuf, sizeof(outbuf), "%d:%d",
 				 WEXITSTATUS(tmp_int), tmp_int2);
-
+#endif
 			field->print_routine(field,
 					     outbuf,
 					     (curr_inx == field_count));
@@ -1146,7 +1158,17 @@ void print_fields(type_t type, void *object)
 		case PRINT_TIMELIMIT:
 			switch(type) {
 			case JOB:
-
+#ifdef NEWQUERY
+				if (job->timelimit == INFINITE)
+					tmp_char = "UNLIMITED";
+				else if (job->timelimit == NO_VAL)
+					tmp_char = "Partition_Limit";
+				else if (job->timelimit) {
+					mins2time_str(job->timelimit,
+						      tmp1, sizeof(tmp1));
+					tmp_char = tmp1;
+				}
+#endif
 				break;
 			case JOBSTEP:
 

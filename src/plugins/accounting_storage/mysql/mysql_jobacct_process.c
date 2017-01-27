@@ -784,7 +784,7 @@ extern int setup_job_cond_limits(mysql_conn_t *mysql_conn,
 		}
 		list_iterator_destroy(itr);
 		xstrcat(*extra, ")");
-	}
+	} 
 
 	if(job_cond->wckey_list && list_count(job_cond->wckey_list)) {
 		set = 0;
@@ -856,6 +856,9 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		"t1.start",
 		"t1.end",
 		"t1.suspended",
+#ifdef NEWQUERY
+		"t1.timelimit",
+#endif
 		"t1.name",
 		"t1.track_steps",
 		"t1.state",
@@ -895,6 +898,9 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		JOB_REQ_START,
 		JOB_REQ_END,
 		JOB_REQ_SUSPENDED,
+#ifdef NEWQUERY
+		JOB_REQ_TIMELIMIT,
+#endif
 		JOB_REQ_NAME,
 		JOB_REQ_TRACKSTEPS,
 		JOB_REQ_STATE,
@@ -1277,6 +1283,9 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		job->submit = submit;                                       /* 9 */
 		job->start = atoi(row[JOB_REQ_START]);                      /* 11 */
 		job->end = atoi(row[JOB_REQ_END]);                          /* 12 */
+#ifdef NEWQUERY
+		job->timelimit = atoi(row[JOB_REQ_TIMELIMIT]);
+#endif
 
 		/* since the job->end could be set later end it here */
 		if(job->end) {

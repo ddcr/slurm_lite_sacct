@@ -64,6 +64,9 @@ plugin: config.h
 	$(MAKE) -C src/plugins/accounting_storage/mysql clean
 	$(MAKE) -C src/plugins/accounting_storage/mysql install
 
+test_bits: test_bits.c
+	$(CC) -o test_bits.x test_bits.c
+
 test_memory_issues: config.h test_memory_issues.o src/api/libslurm.o
 	@rm -f $@$(EXEEXT)
 	$(CCLD) $(CFLAGS) $(LDFLAGS) -o $@$(EXEEXT) test_memory_issues.o \
