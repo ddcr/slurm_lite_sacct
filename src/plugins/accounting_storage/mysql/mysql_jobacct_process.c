@@ -830,7 +830,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 	List local_cluster_list = NULL;
 	DEF_TIMERS_DDCR;
 	// unsigned int num_fields;
-	// char *last_state = NULL, *curr_state = NULL;
+	char *last_state = NULL, *curr_state = NULL;
 	// char c;
 
 	/* if this changes you will need to edit the corresponding 
@@ -1203,13 +1203,14 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		curr_id = atoi(row[JOB_REQ_JOBID]);
 
 		if(job_cond && !job_cond->duplicates && curr_id == last_id) {
-			// curr_state = job_state_string(atoi(row[JOB_REQ_STATE]));
+			curr_state = job_state_string(atoi(row[JOB_REQ_STATE]));
 			// debug4("%d: %s", last_id, last_state);
-			// debug4("%d: %s", curr_id, curr_state);
+			debug4("RR %d: CURR/PREVIOUS STATES=%s %s", curr_id, 
+				curr_state, last_state);
 			// debug4("================================================");
 			continue;
 		}
-		// last_state = curr_state;
+		last_state = curr_state;
 
 #ifdef NEWQUERY
 		if (!good_nodes_from_inx(local_cluster_list,
@@ -1357,7 +1358,8 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 				mysql_free_result(result2);
 			}
 			/* test> seems this branch is never reached */
-			debug("JOBID=%d: manage to enter this branch\n", curr_id);
+			debug("Calculation of job elapsed time with truncation [%d]\n", 
+				curr_id);
 		} else {
 			job->suspended = atoi(row[JOB_REQ_SUSPENDED]);
 #ifdef NEWQUERY
@@ -1473,7 +1475,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			xfree(extra);
 		}
 
-		// info("query = %s", query);
+		// debug4("query = %s", query);
 
 		if(!(step_result = mysql_db_query_ret(
 			     mysql_conn->db_conn, query, 0))) {
@@ -1481,6 +1483,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			list_destroy(job_list);
 			if(local_cluster_list)
 				list_destroy(local_cluster_list);
+			// debug4("SAIU (nao tem step jobs)>> t1.id=%s (%d)\n", id, curr_id);
 			return NULL;
 		}
 		xfree(query);
@@ -1493,6 +1496,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		while ((step_row = mysql_fetch_row(step_result))) {
 			/* check the bitmap to see if this is one of the steps
 			   we are looking for */
+			// debug4("START step job listing>> t1.id=%s (%d)\n", id, curr_id);
 			if(!good_nodes_from_inx(local_cluster_list,
 						(void **)&curr_cluster,
 						step_row[STEP_REQ_NODE_INX],
@@ -1526,8 +1530,9 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 
 			// NOTE: CORRECTIONS ACCORDING TO fix_sacct_db.pl
 			if(!step->start)
-				debug4("step %u.%u: time_start=%d",
-					job->jobid, step->stepid, step->start);
+				debug4("STEP: NO TIME_START>> %u.%u: time_start=%d (%s)\n",
+					job->jobid, step->stepid, step->start,
+					job_state_string(step->state));
 
 			/* assume step->start is nonzero */
 			if(!step->end) {
@@ -1536,18 +1541,25 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 					"where id=%s and stepid=%u",
 					step_table, step->start,
 					id, step->stepid);
-				debug4("step %u.%u: time_end=%d\n\t %s", 
+				// debug4("NO TIME_END>> step %u.%u: time_end=%d\n  %s", 
+				// 	job->jobid, 
+				// 	step->stepid,
+				// 	step->end, 
+				// 	query);
+				debug4("STEP: NO TIME_END>> %u.%u: time_end=%d (%s)\n", 
 					job->jobid, 
 					step->stepid,
-					step->end, 
-					query);
+					job_state_string(step->state));
 				xfree(query);
 			}
 
 			if (!step->start & !step->end)
-				debug4("step %u.%u: time_start=%d, time_end=%d",
-					job->jobid, step->stepid,
-					step->start, step->end);
+				debug4("STEP: NO TIME_START and TIME_END>> %u.%u: time_start=%d, time_end=%d (%s)\n",
+					job->jobid,
+					step->stepid,
+					step->start, 
+					step->end,
+					job_state_string(step->state));
 
 			// NOTE: FIX STEP STATE
 			// if (step->state == JOB_PENDING || step->state == JOB_RUNNING ) {

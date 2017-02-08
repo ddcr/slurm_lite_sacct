@@ -2,11 +2,18 @@
 #
 #'2013-05-01T00:00:00', '2013-05-31T23:59:59'
 
-# starttime="2011-05-31T00:00:00"
-# endtime="now"
+list_join() { 
+    local OLDIFS=$IFS
+    IFS=${1:?"Missing separator"}; shift
+    echo "$*"
+    IFS=$OLDIFS
+}
 
-starttime="2014-01-01T00:00:00"
-endtime="2014-01-31T23:59:59"
+
+starttime="2015-04-01T00:00:00" 
+endtime="2015-04-30T23:59:59"
+# starttime="2014-01-01T00:00:00"
+# endtime="2014-01-31T23:59:59"
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -22,11 +29,61 @@ while [ $# -gt 0 ]; do
     fi
     shift
 done
-echo "starttime=$starttime"
-echo "endtime=$endtime"
+# echo "starttime=$starttime"
+# echo "endtime=$endtime"
 
 # --state=CANCELLED,COMPLETED,FAILED,NODE_FAIL,TIMEOUT \
 # --state=CA,CD,F,NF,TO \
+
+declare -a new_fmt=(
+        'jobid'
+        'jobidraw'
+        'cluster'
+        'partition'
+        'account'
+        'group'
+        'gid'
+        'user'
+        'uid'
+        'submit'
+        'eligible'
+        'start'
+        'end'
+        'elapsed'
+        'exitcode'
+        'state'
+        'nnodes'
+        'ncpus'
+        'reqcpus'
+        'reqmem'
+        'timelimit'
+        'nodelist'
+        'jobname'
+        );
+
+declare -a old_fmt=(
+        'jobid'
+        'cluster'
+        'partition'
+        'account'
+        'group'
+        'gid'
+        'user'
+        'uid'
+        'submit'
+        'eligible'
+        'start'
+        'end'
+        'elapsed'
+        'exitcode'
+        'state'
+        'nnodes'
+        'ncpus'
+        'reqcpus'
+        'timelimit'
+        'nodelist'
+        'jobname'
+        );
 
 ./sacct -vvvvv \
 	--allusers \
@@ -34,7 +91,7 @@ echo "endtime=$endtime"
 	--noheader \
 	--allocations \
 	--clusters veredas \
-	--format=jobid,jobidraw,cluster,partition,account,group,gid,user,uid,submit,eligible,start,end,elapsed,exitcode,state,nnodes,ncpus,reqcpus,reqmem,timelimit,nodelist,jobname \
+	--format=$(list_join , "${old_fmt[@]}") \
 	--state=CA,CD,F,NF,TO \
 	--starttime $starttime \
 	--endtime $endtime

@@ -61,6 +61,8 @@ sacct$(EXEEXT): config.h $(BUILDDIRS) $(sacct_OBJECTS) $(sacct_DEPENDENCIES)
 
 plugin: NEW=1
 plugin: config.h
+	$(MAKE) -C src/plugins/jobcomp/filetxt clean
+	$(MAKE) -C src/plugins/jobcomp/filetxt install
 	$(MAKE) -C src/plugins/accounting_storage/mysql clean
 	$(MAKE) -C src/plugins/accounting_storage/mysql install
 

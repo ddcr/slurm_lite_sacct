@@ -72,9 +72,9 @@
 #define LONG_FIELDS "jobid,jobname,partition,maxvmsize,maxvmsizenode,maxvmsizetask,avevmsize,maxrss,maxrssnode,maxrsstask,averss,maxpages,maxpagesnode,maxpagestask,avepages,mincpu,mincpunode,mincputask,avecpu,ntasks,alloccpus,elapsed,state,exitcode"
 
 #ifdef NEWQUERY
-#define LONG_COMP_FIELDS "jobid,jobidraw,uid,jobname,partition,nnodes,nodes,state,start,end,timelimit"
+#define LONG_COMP_FIELDS "jobid,jobidraw,uid,jobname,partition,nnodes,nodelist,state,start,end,timelimit"
 #else
-#define LONG_COMP_FIELDS "jobid,uid,jobname,partition,nnodes,nodes,state,start,end,timelimit"
+#define LONG_COMP_FIELDS "jobid,uid,jobname,partition,nnodes,nodelist,state,start,end,timelimit"
 #endif
 
 #define BUFFER_SIZE 4096

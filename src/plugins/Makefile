@@ -1,4 +1,4 @@
-DIRS = accounting_storage
+DIRS = accounting_storage jobcomp
 BUILDDIRS = $(DIRS:%=build-%)
 INSTALLDIRS = $(DIRS:%=install-%)
 CLEANDIRS = $(DIRS:%=clean-%)

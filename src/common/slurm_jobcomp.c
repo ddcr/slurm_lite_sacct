@@ -226,6 +226,9 @@ jobcomp_destroy_job(void *object)
 		xfree(job->rotate);
 		xfree(job->geo);
 		xfree(job->bg_start_point);
+#ifdef NEWQUERY
+		xfree(job->work_dir);
+#endif
 		xfree(job);
 	}
 }

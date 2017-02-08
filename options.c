@@ -507,6 +507,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->acct_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->associd_list && list_count(job_cond->associd_list)) {
 		set = 0;
@@ -524,6 +525,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->associd_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->cluster_list && list_count(job_cond->cluster_list)) {
 		set = 0;
@@ -541,6 +543,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->cluster_list is empty");
 	}
+	xfree(extra);
 
 	debug4("job_cond->duplicates = %u", job_cond->duplicates);
 
@@ -560,6 +563,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->groupid_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->partition_list && list_count(job_cond->partition_list)) {
 		set = 0;
@@ -577,6 +581,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->partition_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->resv_list && list_count(job_cond->resv_list)) {
 		set = 0;
@@ -594,6 +599,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->resv_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->resvid_list && list_count(job_cond->resvid_list)) {
 		set = 0;
@@ -611,15 +617,23 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->resvid_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->step_list && list_count(job_cond->step_list)) {
+		jobacct_selected_step_t *selected_step=NULL;
+
 		set = 0;
 		xstrfmtcat(extra, "job_cond->step_list = [");
 		itr = list_iterator_create(job_cond->step_list);
 		while((object = list_next(itr))) {
+			selected_step = (jobacct_selected_step_t *)object;
 			if(set)
 				xstrcat(extra, ", ");
-			xstrfmtcat(extra, "%s", object);
+			if(selected_step->stepid != NO_VAL)
+				xstrfmtcat(extra, "%d.%d", selected_step->jobid,
+										selected_step->stepid);
+			else
+				xstrfmtcat(extra, "%d", selected_step->jobid);
 			set = 1;
 		}
 		list_iterator_destroy(itr);
@@ -628,6 +642,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->step_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->state_list && list_count(job_cond->state_list)) {
 		set = 0;
@@ -645,6 +660,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->state_list is empty");
 	}
+	xfree(extra);
 
 	if(job_cond->usage_start) {
 		char *start_char=NULL;
@@ -656,6 +672,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->usage_start not given.");
 	}
+	xfree(extra);
 
 	if(job_cond->usage_end) {
 		char *end_char=NULL;
@@ -667,12 +684,14 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->usage_end not given.");
 	}
+	xfree(extra);
 
 	if(job_cond->used_nodes) {
 		debug4("job_cond->used_nodes = %s", job_cond->used_nodes);
 	} else {
 		debug4("job_cond->used_nodes is empty.");
 	}
+	xfree(extra);
 
 	if(job_cond->userid_list && list_count(job_cond->userid_list)) {
 		set = 0;
@@ -707,6 +726,7 @@ int print_job_cond(acct_job_cond_t *job_cond) {
 	} else {
 		debug4("job_cond->wckey_list is empty");
 	}
+	xfree(extra);
 
 	debug4("job_cond->without_steps = %u", job_cond->without_steps);
 
@@ -728,11 +748,10 @@ int get_data(void)
 	// * @author         Domingos Rodrigues
 	// print structure job_cond
 	print_job_cond(job_cond);
-
 	//
 	if(params.opt_completion) {
-		// jobs = g_slurm_jobcomp_get_jobs(job_cond);
-		printf("DDCR: no opt_completion\n");
+		// info("Entrei em g_slurm_jobcomp_get_jobs");
+		jobs = g_slurm_jobcomp_get_jobs(job_cond);
 		return SLURM_SUCCESS;
 	} else {
 		jobs = jobacct_storage_g_get_jobs_cond(acct_db_conn, getuid(),
@@ -1076,17 +1095,17 @@ void parse_command_line(int argc, char **argv)
 
 
 	if(params.opt_completion) {
-		// g_slurm_jobcomp_init(params.opt_filein);
+		g_slurm_jobcomp_init(params.opt_filein);
 
-		// acct_type = slurm_get_jobcomp_type();
-		// if ((strcmp(acct_type, "jobcomp/none") == 0)
-		//     &&  (stat(params.opt_filein, &stat_buf) != 0)) {
-		// 	fprintf(stderr, "SLURM job completion is disabled\n");
-		// 	exit(1);
-		// }
-		// xfree(acct_type);
-		fprintf(stderr, "DDCR version: JOBCOMP commented out");
-		exit(1);
+		acct_type = slurm_get_jobcomp_type();
+		if ((strcmp(acct_type, "jobcomp/none") == 0)
+		    &&  (stat(params.opt_filein, &stat_buf) != 0)) {
+			fprintf(stderr, "SLURM job completion is disabled\n");
+			exit(1);
+		}
+		xfree(acct_type);
+		// fprintf(stderr, "DDCR version: JOBCOMP commented out");
+		// exit(1);
 	} else {
 		// DDCR: `slurm_acct_storage_init` loads the plugin
 		slurm_acct_storage_init(params.opt_filein);

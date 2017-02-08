@@ -66,6 +66,10 @@ typedef struct {
 	uint32_t gid;
 	char *gid_name;
 	uint32_t node_cnt;
+#ifdef NEWQUERY
+	uint32_t proc_cnt;
+	char *work_dir;
+#endif
 	char *nodelist;
 	char *jobname;
 	char *state;
