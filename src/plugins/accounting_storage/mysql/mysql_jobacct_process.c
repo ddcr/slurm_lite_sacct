@@ -1500,7 +1500,11 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			if(!good_nodes_from_inx(local_cluster_list,
 						(void **)&curr_cluster,
 						step_row[STEP_REQ_NODE_INX],
+#ifdef NEWQUERY
+						start))
+#else
 						submit))
+#endif
 				continue;
 
 			step = create_jobacct_step_rec();

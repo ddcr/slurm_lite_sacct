@@ -61,6 +61,7 @@ static jobcomp_job_rec_t *_parse_line(List job_info_list)
 	jobcomp_job_rec_t *job = xmalloc(sizeof(jobcomp_job_rec_t));
 	char *temp = NULL;
 	char *temp2 = NULL;
+	bool field_error = false;
 
 	itr = list_iterator_create(job_info_list);
 	while((jobcomp_info = list_next(itr))) {
@@ -139,11 +140,22 @@ static jobcomp_job_rec_t *_parse_line(List job_info_list)
 		}
 #endif
 		else {
-			error("Unknown type %s: %s", jobcomp_info->name,
+			field_error = true;
+			error("Unknown type >> %s: %s", jobcomp_info->name,
 			      jobcomp_info->val);
 		}
 	}
 	list_iterator_destroy(itr);
+
+	if(field_error) {
+		itr = list_iterator_create(job_info_list);
+		while((jobcomp_info = list_next(itr))) {
+			debug2("** %s: %s", jobcomp_info->name,
+				jobcomp_info->val);
+		}
+		list_iterator_destroy(itr);
+		field_error = false;
+	}
 
 	return job;
 }
@@ -257,7 +269,6 @@ extern List filetxt_jobcomp_process_get_jobs(acct_job_cond_t *job_cond)
 			_do_fdump(job_info_list, lc);
 			continue;
 		}
-
 
 		job = _parse_line(job_info_list);
 

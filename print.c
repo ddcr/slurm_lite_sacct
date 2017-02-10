@@ -1046,6 +1046,15 @@ void print_fields(type_t type, void *object)
 				tmp_int = step->start;
 				break;
 			case JOBCOMP:
+#ifdef NEWQUERY
+				// Just to avoid the error message that parse_time spits out
+				if(job_comp->end_time) {
+					if(!job_comp->start_time || (job_comp->start_time > job_comp->end_time)){
+						debug2("%s - %s", job_comp->start_time, job_comp->end_time);
+						job_comp->start_time = xstrdup(job_comp->end_time);
+					}
+				}
+#endif
 				tmp_int = parse_time(job_comp->start_time, 1);
 				break;
 			default:
