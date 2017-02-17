@@ -56,6 +56,8 @@ declare -a new_fmt=(
         'ncpus'
         'reqcpus'
         'reqmem'
+        "reqgres",
+        "reqtres",
         'timelimit'
         'nodelist'
         'jobname'
@@ -91,7 +93,7 @@ declare -a old_fmt=(
 	--noheader \
 	--allocations \
 	--clusters veredas \
-	--format=$(list_join , "${old_fmt[@]}") \
+	--format=$(list_join , "${new_fmt[@]}") \
 	--state=CA,CD,F,NF,TO \
 	--starttime $starttime \
 	--endtime $endtime

@@ -426,6 +426,7 @@ extern int good_nodes_from_inx(List local_cluster_list,
 static void _state_time_string(char **extra, uint32_t state,
 	uint32_t start, uint32_t end)
 {
+	// debug2("_state_time_string >> start=%d, end=%d", start, end);
 	if (!start && !end) {
 		xstrfmtcat(*extra, "t1.state='%u'", state);
 		return;
@@ -1449,7 +1450,6 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			list_iterator_destroy(itr);
 			if(set)
 				xstrcat(extra, ")");
-		   	info("DDCR: Step list was specified\n");
 		   	debug3("%d(%d) extra for step job query\n%s", mysql_conn->conn, __LINE__, extra);
 		}
 

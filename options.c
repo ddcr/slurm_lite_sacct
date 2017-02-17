@@ -1044,6 +1044,29 @@ void parse_command_line(int argc, char **argv)
 
 	job_cond->duplicates = params.opt_dup;
 
+#ifdef NEWQUERY
+	if (!job_cond->usage_start && !job_cond->step_list) {
+		struct tm start_tm;
+		job_cond->usage_start = time(NULL);
+		/* If we are looking for job states default to now.
+		   If not default to midnight of the current day.
+		*/
+		if (!job_cond->state_list
+		    || !list_count(job_cond->state_list)) {
+			if (!localtime_r(&job_cond->usage_start,
+					       &start_tm)) {
+				error("Couldn't get localtime from %ld",
+				      (long)job_cond->usage_start);
+				return;
+			}
+			start_tm.tm_sec = 0;
+			start_tm.tm_min = 0;
+			start_tm.tm_hour = 0;
+			start_tm.tm_isdst = -1;
+			job_cond->usage_start = mktime(&start_tm);
+		}
+	}
+#else
 	if(!job_cond->usage_start) {
 		job_cond->usage_start = time(NULL);
 		struct tm start_tm;
@@ -1059,7 +1082,7 @@ void parse_command_line(int argc, char **argv)
 		start_tm.tm_isdst = -1;
 		job_cond->usage_start = mktime(&start_tm);
 	}
-
+#endif
 	if(verbosity > 0) {
 		char *start_char =NULL, *end_char = NULL;
 

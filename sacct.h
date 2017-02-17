@@ -69,13 +69,13 @@
 #define BRIEF_COMP_FIELDS "jobid,uid,state"
 #define DEFAULT_FIELDS "jobid,jobname,partition,account,alloccpus,state,exitcode"
 #define DEFAULT_COMP_FIELDS "jobid,uid,jobname,partition,nnodes,nodes,state,end"
-#define LONG_FIELDS "jobid,jobname,partition,maxvmsize,maxvmsizenode,maxvmsizetask,avevmsize,maxrss,maxrssnode,maxrsstask,averss,maxpages,maxpagesnode,maxpagestask,avepages,mincpu,mincpunode,mincputask,avecpu,ntasks,alloccpus,elapsed,state,exitcode"
-
 #ifdef NEWQUERY
-#define LONG_COMP_FIELDS "jobid,jobidraw,uid,jobname,partition,nnodes,nodelist,state,start,end,timelimit"
+#define LONG_FIELDS "jobid,jobidraw,jobname,partition,maxvmsize,maxvmsizenode,maxvmsizetask,avevmsize,maxrss,maxrssnode,maxrsstask,averss,maxpages,maxpagesnode,maxpagestask,avepages,mincpu,mincpunode,mincputask,avecpu,ntasks,alloccpus,elapsed,state,exitcode,reqmem,reqgres,reqtres"
 #else
-#define LONG_COMP_FIELDS "jobid,uid,jobname,partition,nnodes,nodelist,state,start,end,timelimit"
+#define LONG_FIELDS "jobid,jobname,partition,maxvmsize,maxvmsizenode,maxvmsizetask,avevmsize,maxrss,maxrssnode,maxrsstask,averss,maxpages,maxpagesnode,maxpagestask,avepages,mincpu,mincpunode,mincputask,avecpu,ntasks,alloccpus,elapsed,state,exitcode"
 #endif
+
+#define LONG_COMP_FIELDS "jobid,uid,jobname,partition,nnodes,nodelist,state,start,end,timelimit"
 
 #define BUFFER_SIZE 4096
 #define STATE_COUNT 10
@@ -99,6 +99,9 @@ typedef enum {	HEADLINE,
 typedef enum {
 		PRINT_ALLOC_CPUS,
 		PRINT_ACCOUNT,
+#ifdef NEWQUERY
+		PRINT_TRESR,
+#endif
 		PRINT_ASSOCID,
 		PRINT_AVECPU,
 		PRINT_AVEPAGES,
@@ -140,6 +143,7 @@ typedef enum {
 		PRINT_QOS,
 		PRINT_QOSRAW,
 #ifdef NEWQUERY
+		PRINT_REQ_GRES,
 		PRINT_REQ_MEM,
 #endif
 		PRINT_REQ_CPUS,

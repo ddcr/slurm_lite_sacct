@@ -12,6 +12,7 @@ import multiprocessing
 from multiprocessing.pool import ThreadPool
 
 # requested by OpenXdmod
+
 cmd_format = ["jobid",
               "jobidraw",
               "cluster",
@@ -32,6 +33,8 @@ cmd_format = ["jobid",
               "ncpus",
               "reqcpus",
               "reqmem",
+              "reqgres",
+              "reqtres",
               "timelimit",
               "nodelist",
               "jobname"]

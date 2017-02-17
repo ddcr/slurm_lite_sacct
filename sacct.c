@@ -52,7 +52,9 @@ print_field_t fields[] = {
 	{6, "QOSRAW", print_fields_int, PRINT_QOSRAW},
 	{8, "ReqCPUS", print_fields_int, PRINT_REQ_CPUS},
 #ifdef NEWQUERY
+	{12, "ReqGRES", print_fields_str, PRINT_REQ_GRES},
 	{10, "ReqMem", print_fields_str, PRINT_REQ_MEM},
+	{10, "ReqTRES", print_fields_str, PRINT_TRESR},
 #endif
 	{10, "Reserved", print_fields_time_from_secs, PRINT_RESV},
 	{10, "ResvCPU", print_fields_time_from_secs, PRINT_RESV_CPU},

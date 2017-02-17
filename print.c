@@ -917,6 +917,25 @@ void print_fields(type_t type, void *object)
 					     (curr_inx == field_count));
 			break;
 #ifdef NEWQUERY
+        case PRINT_REQ_GRES:
+        	switch(type) {
+			case JOB:
+				// tmp_char = job->req_gres;
+				tmp_char = NULL;
+				break;
+			case JOBSTEP:
+				// tmp_char = step->job_ptr->req_gres;
+				tmp_char = NULL;
+				break;
+			case JOBCOMP:
+			default:
+				tmp_char = NULL;
+				break;
+			}
+			field->print_routine(field,
+						 tmp_char,
+						 (curr_inx == field_count));
+			break;
 		/* I am going to assume the default min_per_cpu from slurm.conf
 		 * I suspect that only very few jobs requested explicitly
 		 *  memory constraints */
@@ -1217,6 +1236,25 @@ void print_fields(type_t type, void *object)
 					     (curr_inx == field_count));
 			xfree(tmp_char);
 			break;
+#ifdef NEWQUERY
+		case PRINT_TRESR:
+			switch(type) {
+			case JOB:
+				// tmp_char = job->tres_req_str;
+				tmp_char = NULL;
+				break;
+			case JOBSTEP:
+			case JOBCOMP:
+			default:
+				tmp_char = NULL;
+				break;
+			}
+			field->print_routine(field,
+								 tmp_char,
+								 (curr_inx == field_count));
+			xfree(tmp_char);
+			break;
+#endif
 		case PRINT_UID:
 			switch(type) {
 			case JOB:

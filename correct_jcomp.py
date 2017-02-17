@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 #
+# This script deals directly with the logfiles
+# produced by the SLURM job completion logging.
+# These files are an important auxiliary test
+# of the integrity of the mysql slurmdbd data.
+#
 import csv
 from collections import OrderedDict
 
@@ -7,6 +12,12 @@ fields = ["JobId", "UserId", "GroupId", "Name", "JobState", "Partition",
           "TimeLimit", "StartTime", "EndTime", "NodeList", "NodeCnt",
           "ProcCnt", "WorkDir"]
 
+#
+# list_of_jobids_problem.txt contains all jobids which have the
+# fields Name=VAL and WorkDir=VAL with problematic strings.
+# They were identified by parsing the jobcomp CSV logfiles produced by
+# slurm along with the mysql database.
+#
 with open('list_of_jobids_problem.txt', 'rb') as fd:
     jobids_list = [int(x) for x in fd.readlines()]
 
