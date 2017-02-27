@@ -10,8 +10,8 @@ list_join() {
 }
 
 
-starttime="2015-04-01T00:00:00" 
-endtime="2015-04-30T23:59:59"
+starttime="2013-04-01T00:00:00" 
+endtime="2013-04-30T23:59:59"
 # starttime="2014-01-01T00:00:00"
 # endtime="2014-01-31T23:59:59"
 
@@ -56,8 +56,8 @@ declare -a new_fmt=(
         'ncpus'
         'reqcpus'
         'reqmem'
-        "reqgres",
-        "reqtres",
+        'reqgres'
+        'reqtres'
         'timelimit'
         'nodelist'
         'jobname'

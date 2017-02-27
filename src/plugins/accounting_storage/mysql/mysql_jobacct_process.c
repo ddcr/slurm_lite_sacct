@@ -1533,10 +1533,16 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			step->end = atoi(step_row[STEP_REQ_END]);
 
 			// NOTE: CORRECTIONS ACCORDING TO fix_sacct_db.pl
-			if(!step->start)
-				debug4("STEP: NO TIME_START>> %u.%u: time_start=%d (%s)\n",
-					job->jobid, step->stepid, step->start,
-					job_state_string(step->state));
+			if(!step->start){
+				debug4("STEP: NO TIME_START");
+				debug4("\t %u.%u:", job->jobid, step->stepid);
+				debug4("\t job (state=%d):", job->state);
+				debug4("\t\t %d--%d = %d", job->start, job->end, 
+						                   job->elapsed);
+				debug4("\t step (state=%d):", step->state);
+				debug4("\t\t %d--%d", step->start, step->end);
+				debug4("=======================================");
+			}
 
 			/* assume step->start is nonzero */
 			if(!step->end) {
@@ -1545,15 +1551,19 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 					"where id=%s and stepid=%u",
 					step_table, step->start,
 					id, step->stepid);
-				// debug4("NO TIME_END>> step %u.%u: time_end=%d\n  %s", 
-				// 	job->jobid, 
+				// debug4("NO TIME_END>> step %u.%u: time_end=%d\n  %s",
+				// 	job->jobid,
 				// 	step->stepid,
-				// 	step->end, 
+				// 	step->end,
 				// 	query);
-				debug4("STEP: NO TIME_END>> %u.%u: time_end=%d (%s)\n", 
-					job->jobid, 
-					step->stepid,
-					job_state_string(step->state));
+				debug4("STEP: NO TIME_END");
+				debug4("\t %u.%u:", job->jobid, step->stepid);
+				debug4("\t job (state=%d):", job->state);
+				debug4("\t\t %d--%d = %d", job->start, job->end,
+						                   job->elapsed);
+				debug4("\t step (state=%d):", step->state);
+				debug4("\t\t %d--%d", step->start, step->end);
+				debug4("=======================================");
 				xfree(query);
 			}
 

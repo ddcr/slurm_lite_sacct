@@ -10,6 +10,7 @@ import textwrap
 import subprocess
 import multiprocessing
 from multiprocessing.pool import ThreadPool
+from collections import OrderedDict
 
 # requested by OpenXdmod
 
@@ -39,8 +40,35 @@ cmd_format = ["jobid",
               "nodelist",
               "jobname"]
 
+sql_col_fmt = OrderedDict([("jobid", "t1.jobid"),
+                           ("jobidraw", "t1.jobid"),
+                           ("cluster", "t2.cluster"),
+                           ("partition", "t1.partition"),
+                           ("account", "t1.account"),
+                           ("group", "t1.gid"),
+                           ("gid", "t1.gid"),
+                           ("user", "t2.user"),
+                           ("uid", "t1.uid"),
+                           ("submit", "FROM_UNIXTIME(t1.submit)"),
+                           ("eligible", "FROM_UNIXTIME(t1.eligible)"),
+                           ("start", "FROM_UNIXTIME(t1.start)"),
+                           ("end", "FROM_UNIXTIME(t1.end)"),
+                           ("elapsed", "DATE_FORMAT(SEC_TO_TIME(GREATEST(CAST(t1.end AS SIGNED)-CAST(t1.start AS SIGNED), 0)), \'%d-%H:%i:%S\')"),
+                           ("exitcode", "t1.comp_code"),
+                           ("state", "t1.state"),
+                           ("nnodes", "t1.alloc_nodes"),
+                           ("ncpus", "t1.alloc_cpus"),
+                           ("reqcpus", "t1.req_cpus"),
+                           ("reqmem", None),
+                           ("reqgres", None),
+                           ("reqtres", None),
+                           ("timelimit",
+                            "DATE_FORMAT(SEC_TO_TIME(t1.timelimit*60), \'%d-%H:%i:%S\')"),
+                           ("nodelist", "t1.nodelist"),
+                           ("jobname", "t1.name")])
+
 # remove timelimit for now ...
-cmd_format.remove('timelimit')
+# cmd_format.remove('timelimit')
 cmd_format_string = '--format={0}'.format(','.join(cmd_format))
 
 # as requested by OpenXdmod, but for our version
@@ -260,7 +288,43 @@ def use_concurrent():
                     print('Main: error: {0} {1}'.format(f, error))
 
 
+def extract_sql_from_errfiles(root_path):
+    """Summary
+
+    Returns:
+        TYPE: Description
+    """
+    import scandir
+
+    def sql_stmt_line(f):
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("select"):
+                yield line
+            else:
+                continue
+
+    lead_mysql_str = ', '.join([v for k, v in sql_col_fmt.items()
+                                if v is not None])
+
+    for root, dirs, files in scandir.walk(root_path):
+        for err_file in files:
+            err_file = os.path.join(root, err_file)
+            if err_file.endswith(".err"):
+                sql_file = os.path.splitext(err_file)[0]+'.sql'
+                with open(sql_file, 'wb') as sqlf:
+                    with open(err_file, 'r') as errf:
+                        for line in sql_stmt_line(errf):
+                            substrings = line.split('from')
+                            sqlf.write(
+                                "select {0} from {1}".format(lead_mysql_str,
+                                                             substrings[-1]))
+
+
 if __name__ == '__main__':
     """
     """
-    use_concurrent()
+    # use_concurrent()
+    extract_sql_from_errfiles("sacct_outputs")

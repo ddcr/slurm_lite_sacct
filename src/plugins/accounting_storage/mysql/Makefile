@@ -5,6 +5,7 @@ libdir = $(realpath $(top_builddir))/lib64
 pkglibdir = $(libdir)/slurm
 
 NORMAL_INSTALL = :
+NORMAL_UNINSTALL = :
 
 CC = gcc
 CCDEPMODE = depmode=none
@@ -132,13 +133,15 @@ mostlyclean-libtool:
 
 mostlyclean-am: mostlyclean-compile mostlyclean-libtool
 
-clean: clean-generic clean-libtool mostlyclean-am
+clean: clean-generic clean-libtool mostlyclean-am uninstall-am
 
 all: all-am
 
 all-am: Makefile $(LTLIBRARIES) install
 
 install: install-am
+uninstall: uninstall-am
+
 install-am: all-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am
 install-exec-am: install-pkglibLTLIBRARIES
@@ -152,3 +155,11 @@ install-pkglibLTLIBRARIES: $(pkglib_LTLIBRARIES)
 		    $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(pkglibLTLIBRARIES_INSTALL) $(INSTALL_STRIP_FLAG) "$$p" "$(DESTDIR)$(pkglibdir)/$$f"; \
 		  else :; fi; \
 		done
+uninstall-pkglibLTLIBRARIES:
+		@$(NORMAL_UNINSTALL)
+		@list='$(pkglib_LTLIBRARIES)'; for p in $$list; do \
+		  p=$(am__strip_dir) \
+		  echo " $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f '$(DESTDIR)$(pkglibdir)/$$p'"; \
+		  $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=uninstall rm -f "$(DESTDIR)$(pkglibdir)/$$p"; \
+		done
+uninstall-am: uninstall-pkglibLTLIBRARIES

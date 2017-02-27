@@ -1100,6 +1100,15 @@ void parse_command_line(int argc, char **argv)
 		xfree(end_char);
 	}
 
+	debug("===================== BUGS ==================\n"
+		  "The sacct command, when requested\n"
+		  "to display priority, displays a\n"
+		  "constant value: 2147483647. This\n"
+		  "is a bug reported at\n"
+		  "https://bugs.schedmd.com/show_bug.cgi?id=102.\n"
+		  "So for this slurm version, the job\n"
+		  "priority is not saved correctly to mysql\n\n");
+
 	debug("Options selected:\n"
 	      "\topt_completion=%d\n"
 	      "\topt_dump=%d\n"

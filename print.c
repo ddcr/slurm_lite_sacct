@@ -1189,8 +1189,9 @@ void print_fields(type_t type, void *object)
 #ifdef NEWQUERY
 				if (job->timelimit == INFINITE)
 					tmp_char = "UNLIMITED";
-				else if (job->timelimit == NO_VAL)
+				else if (job->timelimit == NO_VAL){
 					tmp_char = "Partition_Limit";
+				}
 				else if (job->timelimit) {
 					mins2time_str(job->timelimit,
 						      tmp1, sizeof(tmp1));
