@@ -8,7 +8,9 @@ import time
 import datetime
 # import paratext
 import pandas as pd
-from io import StringIO
+# from io import StringIO
+import click
+import sys
 
 LOGPATH = os.path.abspath(os.path.join(os.path.dirname(__file__),
                           'sacct_outputs'))
@@ -19,6 +21,11 @@ FIELDS = ["jobid", "jobidraw", "cluster", "partition",
           "ncpus", "reqcpus", "reqmem", "reqgres",
           "reqtres", "timelimit", "nodelist",
           "jobname"]
+
+
+@click.group()
+def cli():
+    pass
 
 
 def convert_to_d_h_m_s(seconds):
@@ -165,6 +172,7 @@ def use_serial():
                 print(r)
 
 
+@cli.command()
 def use_concurrent():
     """Summary
 
@@ -204,7 +212,11 @@ def use_concurrent():
     #         writer.writerow(row)
 
 
-def csv2dataframe(csvfile='all.csv', convert_timedelta=None):
+@cli.command()
+@click.option("--convert/--no-convert", default=True,
+              help="convert timelimit/elapsed to %d-%H:%M:%S")
+@click.argument("csvfile", default='all.csv')
+def csv2df(csvfile, convert):
     """Summary
 
     Args:
@@ -213,17 +225,23 @@ def csv2dataframe(csvfile='all.csv', convert_timedelta=None):
     Returns:
         TYPE: Description
     """
+    click.echo('csvfile={0} convert={1}'.format(csvfile, convert))
     start = time.clock()
-    df = pd.read_csv(csvfile,
-                     parse_dates=[9, 10, 11, 12],
-                     infer_datetime_format=True,
-                     header=None,
-                     delimiter='|',
-                     engine='c',
-                     converters={'elapsed': reformat_timedelta_string,
-                                 'timelimit': reformat_timedelta_string},
-                     names=FIELDS)
-    store = pd.HDFStore('all.compressed.h5',
+    csv_kw = {'parse_dates': [9, 10, 11, 12],
+              'infer_datetime_format': True,
+              'header': None,
+              'delimiter': '|',
+              'engine': 'c',
+              'names': FIELDS}
+
+    if convert:
+        csv_kw['converters'] = {'elapsed': reformat_timedelta_string,
+                                'timelimit': reformat_timedelta_string}
+
+    df = pd.read_csv(csvfile, **csv_kw)
+
+    h5filename = os.path.splitext(csvfile)[0]+'.blosc.h5'
+    store = pd.HDFStore(h5filename,
                         complevel=9,
                         complib='blosc')
     store.put('df', df, format='table')
@@ -240,7 +258,7 @@ def analyze_h5_dataframe(h5file='all.compressed.h5', check=False):
     if not os.path.exists(h5file):
         print(('H5 file does not exist. Recreate',
                ' it with cvs2dataframe'))
-        csv2dataframe()
+        csv2df()
 
     start = time.clock()
     df = pd.read_hdf(h5file)
@@ -265,9 +283,9 @@ def analyze_h5_dataframe(h5file='all.compressed.h5', check=False):
 
 
 if __name__ == '__main__':
+    pass
     # test('sacct_outputs/slurm-2013/slurm-2013-05-01.log')
     # test_alt('sacct_outputs/slurm-2014/slurm-2014-02-01.log')
-    # use_concurrent()
     # use_serial()
-    # csv2dataframe()
-    analyze_h5_dataframe()
+    # analyze_h5_dataframe()
+    cli()

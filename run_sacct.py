@@ -91,6 +91,7 @@ cmd_options = ["--allusers",
 
 # Do I want duplicated jobids ?
 cmd_options.append('--duplicates')
+
 cmd_options_string = ' '.join(cmd_options)
 
 
@@ -249,7 +250,7 @@ def use_concurrent():
     cmd_sacct = get_sacct_cmd()
     kwds = {'sacct_fmt': cmd_sacct}
     # for y in [2011]:
-    for y in [2011, 2012, 2013, 2014, 2015, 2016]:
+    for y in [2011, 2012, 2013, 2014, 2015, 2016, 2017]:
         #
         # First create the output directory
         outdir = './sacct_outputs/slurm-{0}'.format(y)
@@ -264,10 +265,15 @@ def use_concurrent():
                 )
                 sys.exit(1)
 
+        if y == 2017:
+            month_upper = 3
+        else:
+            month_upper = 13
+
         year_range = [get_month_day_range(datetime.datetime(year=y,
                                                             month=m,
                                                             day=1))
-                      for m in range(1, 13)
+                      for m in range(1, month_upper)
                       ]
         # year_range = [get_firstweek_day_range(datetime.datetime(year=y,
         #                                                         month=m,
@@ -327,4 +333,5 @@ if __name__ == '__main__':
     """
     """
     # use_concurrent()
+    extract_sql_from_errfiles("sacct_outputs_no_dupes")
     extract_sql_from_errfiles("sacct_outputs")

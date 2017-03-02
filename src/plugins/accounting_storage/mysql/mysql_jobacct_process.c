@@ -1034,7 +1034,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 	   since we could update the start/end time.
 	*/
 	if(job_cond && job_cond->used_nodes) {
-		debug4("DDCR: entering setup_cluster_list_with_inx");
+		debug4("@@REQUESTED CONDITIONAL: job_cond->used_nodes");
 		local_cluster_list = setup_cluster_list_with_inx(
 			mysql_conn, job_cond, (void **)&curr_cluster);
 		if(!local_cluster_list) {
@@ -1112,6 +1112,7 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 #ifdef NEWQUERY
 	// setup_job_cluster_cond_limits(mysql_conn, job_cond, &extra);
 	if(job_cond->state_list && list_count(job_cond->state_list)) {
+		debug4("@@REQUESTED CONDITIONAL: job_cond->state_list");
 		char *object = NULL;
 		set = 0;
 		if(extra)
@@ -1206,9 +1207,9 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		if(job_cond && !job_cond->duplicates && curr_id == last_id) {
 			curr_state = job_state_string(atoi(row[JOB_REQ_STATE]));
 			// debug4("%d: %s", last_id, last_state);
-			debug4("RR %d: CURR/PREVIOUS STATES=%s %s", curr_id, 
+			debug4("@@DUPLICATE %d state=%s, previous state=%s", curr_id,
 				curr_state, last_state);
-			// debug4("================================================");
+			debug4("================================================");
 			continue;
 		}
 		last_state = curr_state;
@@ -1217,7 +1218,8 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		if (!good_nodes_from_inx(local_cluster_list,
 					 (void **)&curr_cluster,
 					 row[JOB_REQ_NODE_INX], start)) {
-			debug4("DDCR: No good_nodes_from_inx: %s", row[JOB_REQ_NODE_INX]);
+			debug4("@@ jobid=%d | No good_nodes_from_inx: %s", curr_id,
+				row[JOB_REQ_NODE_INX]);
 			last_id = curr_id;
 			continue;
 		}
@@ -1229,7 +1231,8 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		if(!good_nodes_from_inx(local_cluster_list,
 					(void **)&curr_cluster,
 					row[JOB_REQ_NODE_INX], submit)){
-			debug4("DDCR: No good_nodes_from_inx: %s", row[JOB_REQ_NODE_INX]);
+			debug4("@@ jobid=%d | No good_nodes_from_inx: %s", curr_id,
+				row[JOB_REQ_NODE_INX]);
 			continue;
 		}
 #endif
@@ -1237,9 +1240,15 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		job = create_jobacct_job_rec();
 #ifdef NEWQUERY
 		if (curr_id == last_id)
-			/* put in reverse so we order by the submit getting
-			   larger which it is given to us in reverse
-			   order from the database */
+/*
+			We ordered the output of the previous mysql query
+			by job submit time (ascending order). We preserve
+			that order in job_list in case we want all jobs, even
+			those that are duplicated.
+ */
+           /* put in reverse so we order by the submit getting
+               larger which it is given to us in reverse
+               order from the database */
 			list_prepend(job_list, job);
 		else
 			list_append(job_list, job);
@@ -1401,11 +1410,13 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 		job->state = atoi(row[JOB_REQ_STATE]);                /* 15 */
 		job->priority = atoi(row[JOB_REQ_PRIORITY]);
 		job->req_cpus = atoi(row[JOB_REQ_REQ_CPUS]);          /* 18 */
-// if (row[JOB_REQ_GRES_REQ])
-//     job->req_gres = xstrdup(row[JOB_REQ_GRES_REQ]);
-// else
-//     job->req_gres = xstrdup("");
-//job->req_mem = slurm_atoul(row[JOB_REQ_REQ_MEM]);
+
+/*		if (row[JOB_REQ_GRES_REQ])
+			job->req_gres = xstrdup(row[JOB_REQ_GRES_REQ]);
+		else
+			job->req_gres = xstrdup("");
+		job->req_mem = slurm_atoul(row[JOB_REQ_REQ_MEM]);
+*/
 		job->requid = atoi(row[JOB_REQ_KILL_REQUID]);
 		job->qos = atoi(row[JOB_REQ_QOS]);
 		job->show_full = 1;
@@ -1568,12 +1579,14 @@ extern List mysql_jobacct_process_get_jobs(mysql_conn_t *mysql_conn, uid_t uid,
 			}
 
 			if (!step->start & !step->end)
-				debug4("STEP: NO TIME_START and TIME_END>> %u.%u: time_start=%d, time_end=%d (%s)\n",
-					job->jobid,
-					step->stepid,
-					step->start, 
-					step->end,
-					job_state_string(step->state));
+				debug4("STEP: NO TIME_START & TIME_END");
+				debug4("\t %u.%u:", job->jobid, step->stepid);
+				debug4("\t job (state=%d):", job->state);
+				debug4("\t\t %d--%d = %d", job->start, job->end,
+						                   job->elapsed);
+				debug4("\t step (state=%d):", step->state);
+				debug4("\t\t %d--%d", step->start, step->end);
+				debug4("=======================================");
 
 			// NOTE: FIX STEP STATE
 			// if (step->state == JOB_PENDING || step->state == JOB_RUNNING ) {
