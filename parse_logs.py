@@ -175,9 +175,7 @@ def use_serial():
 @cli.command()
 def use_concurrent():
     """Summary
-
-    Returns:
-        TYPE: Description
+        Parallel runs of SLURM sacct
     """
     import concurrent.futures
     from concurrent.futures import ThreadPoolExecutor
@@ -214,11 +212,12 @@ def use_concurrent():
 
 @cli.command()
 @click.option("--convert/--no-convert", default=True,
-              help="convert timelimit/elapsed to %d-%H:%M:%S")
+              help="convert timelimit/elapsed to %d days %H:%M:%S",
+              show_default=True)
 @click.argument("csvfile", default='all.csv')
 def csv2df(csvfile, convert):
     """Summary
-
+        Reads the SLURM csv file into Pandas dataframe
     Args:
         cvsfile (str, optional): Description
 
@@ -239,6 +238,9 @@ def csv2df(csvfile, convert):
                                 'timelimit': reformat_timedelta_string}
 
     df = pd.read_csv(csvfile, **csv_kw)
+    df['timelimit'] = pd.to_timedelta(df['timelimit'])
+    df['elapsed'] = pd.to_timedelta(df['elapsed'])
+    print df.info()
 
     h5filename = os.path.splitext(csvfile)[0]+'.blosc.h5'
     store = pd.HDFStore(h5filename,
@@ -249,26 +251,34 @@ def csv2df(csvfile, convert):
     print time.clock() - start
 
 
-def analyze_h5_dataframe(h5file='all.compressed.h5', check=False):
+@cli.command()
+@click.option("--check/--no-check", default=False,
+              help="check if dataframe from HDF5 comes from CSV file")
+@click.argument("h5file", default='all.compressed.h5')
+def analyze_df_h5(h5file, check):
     """Summary
-
+        Statistical analysis of dataframe with SLURM logs
     Returns:
         TYPE: Description
     """
+    click.echo('h5file={0} check={1}'.format(h5file, check))
     if not os.path.exists(h5file):
         print(('H5 file does not exist. Recreate',
-               ' it with cvs2dataframe'))
-        csv2df()
+               ' it with cvs2df --no-convert'))
+        sys.exit(1)
 
     start = time.clock()
     df = pd.read_hdf(h5file)
 
     if check:
-        df.to_csv('all.test.csv',
+        csvfile = os.path.splitext(h5file)[0]+'.test.csv'
+        # rearrange the fields timelimit and elapsed
+        df.to_csv(csvfile,
                   sep='|',
                   header=False,
                   index=False,
                   date_format='%Y-%m-%dT%H:%M:%S')
+        sys.exit(1)
 
     # get all duplicated jobids
     # df_dupes = df[df.duplicated(['jobid'], keep=False)]
