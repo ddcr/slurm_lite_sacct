@@ -209,7 +209,7 @@ def work_sacct(datetime_t, sacct_fmt='sacct.exe', outdir='',
                     a = textwrap.dedent("""\
                                         {0}:
                                            Finished
-                                        """.format(''.join(cmd)))
+                                        """.format(' '.join(cmd)))
                 finally:
                     time.sleep(2)
                     return(a)
@@ -332,6 +332,6 @@ def extract_sql_from_errfiles(root_path):
 if __name__ == '__main__':
     """
     """
-    # use_concurrent()
-    extract_sql_from_errfiles("sacct_outputs_no_dupes")
-    extract_sql_from_errfiles("sacct_outputs")
+    use_concurrent()
+    # extract_sql_from_errfiles("sacct_outputs_no_dupes")
+    # extract_sql_from_errfiles("sacct_outputs")
