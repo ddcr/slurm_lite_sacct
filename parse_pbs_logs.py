@@ -227,7 +227,7 @@ def test(csvfile):
     #             to_excel(writer, sheet_name=c, na_rep='-')
     df_proc.to_excel(writer, na_rep='-')
 
-    print df_proc['group'].shape
+    # print df_proc['group'].shape
 
     format1 = writer.book.add_format({'bg_color': '#FFC7CE',
                                       'font_color': '#9C0006'})
