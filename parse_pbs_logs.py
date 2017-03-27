@@ -52,12 +52,53 @@ LOGPATH = os.path.abspath(os.path.join(os.path.dirname(__file__),
 #        'message_text' field contains the same item (items) as in a U
 #        record type.
 
+PBS_XDMOD_COLUMNS = [
+    'job_id',
+    'job_array_index',
+    'host',
+    'queue',
+    'user',
+    # 'groupname',  # group
+    'ctime',
+    'qtime',
+    'start',
+    'end',
+    'etime',
+    'exit_status',
+    'session',
+    'requestor',
+    'jobname',
+    'owner',
+    'account',
+    'session_id',
+    'error_path',
+    'output_path',
+    'exec_host',
+    'resources_used.vmem',
+    'resources_used.mem',
+    'resources_used.walltime',
+    # 'resources_used_nodes', # exec_host
+    # 'resources_used_cpus', # exec_host
+    'resources_used.cput',
+    'Resource_List.nodes',
+    'Resource_List.procs',
+    'Resource_List.neednodes',
+    'Resource_List.pcput',
+    'Resource_List.cput',
+    'Resource_List.walltime',
+    'Resource_List.ncpus',
+    'Resource_List.nodect',
+    'Resource_List.mem',
+    'Resource_List.pmem',
+    # 'node_list'  # exec_host
+]
+
 PBSPRO_FIELD_NAMES = ['datetime', 'record_type',
                       'id_string', 'message_text']
 PBSPRO_FIELD_TYPES = OrderedDict([('datetime', object),
-                             ('record_type', np.str_),
-                             ('id_string', np.str_),
-                             ('message_text', np.str_)])
+                                  ('record_type', np.str_),
+                                  ('id_string', np.str_),
+                                  ('message_text', np.str_)])
 PBSPRO_MESSAGE_TEXT_NAMES = [
     'user',
     'group',
@@ -201,9 +242,6 @@ def test(csvfile):
     """
     Testing general functions
     """
-    import xlsxwriter
-    from xlsxwriter.utility import xl_range
-
     csv_kw = {'parse_dates': [0],
               'infer_datetime_format': True,
               'header': None,
@@ -227,15 +265,17 @@ def test(csvfile):
     #             to_excel(writer, sheet_name=c, na_rep='-')
     df_proc.to_excel(writer, na_rep='-')
 
-    # print df_proc['group'].shape
+    col = df_proc.columns.get_loc('group')+1
+    last_row = len(df_proc['group'])
 
     format1 = writer.book.add_format({'bg_color': '#FFC7CE',
                                       'font_color': '#9C0006'})
     worksheet = writer.sheets['Sheet1']
-    worksheet.conditional_format('G1:G100', {'type': 'text',
-                                             'criteria': 'containing',
-                                             'value': 'bio519',
-                                             'format': format1})
+    worksheet.conditional_format(1, col, last_row, col,
+                                 {'type': 'text',
+                                  'criteria': 'containing',
+                                  'value': 'bio519',
+                                  'format': format1})
     writer.save()
 
 
@@ -479,12 +519,205 @@ def run_concurrent(task, rootdir):
             print pbspro_fields
         elif isinstance(reduce_results[0], pd.DataFrame):
             df_reduced = pd.concat(reduce_results)
-            # Cannot convert NA to integer
-            # df_reduced.astype(
-            #     OrderedDict(PBSPRO_FIELD_TYPES, **PBSPRO_MESSAGE_TEXT_TYPES)
-            # )
-            # print df_reduced.info()
-            df_reduced.to_csv('reduced_results.csv', sep='|')
+            df_reduced.index = pd.Index(range(len(df_reduced)))
+            # check if there are columns with NaN values and
+            # declared as of integer type.
+            # http://pandas.pydata.org/pandas-docs/
+            #      stable/gotchas.html#support-for-integer-na
+            # The lack of NaN rep in integer columns is a pandas "gotcha".
+            # The usual workaround is to simply use floats
+            dict_dtypes = dict(PBSPRO_FIELD_TYPES, **PBSPRO_MESSAGE_TEXT_TYPES)
+            for c in df_reduced.columns:
+                if df_reduced[c].isnull().values.any():
+                    if dict_dtypes[c] == np.int64:
+                        dict_dtypes[c] = np.float64
+
+            df_reduced.astype(dict_dtypes)
+            # sorting job entries by datetime
+            df_reduced.sort_values(['datetime'], inplace=True)
+            df_reduced.info()
+            df_reduced.to_csv('reduced_res.csv', sep='|')
+
+
+@cli.command('work')
+@click.argument("csvfile", default='reduced_res.csv')
+def work(csvfile):
+    """
+        Work on final aggregated PBSPro accounting
+    """
+    print 'csvfile = {}'.format(csvfile)
+    # print dict(PBSPRO_FIELD_TYPES, **PBSPRO_MESSAGE_TEXT_TYPES)
+    df_reduced = pd.read_csv(
+        csvfile,
+        sep='|',
+        engine='c',
+        infer_datetime_format=True,
+        parse_dates=['datetime'],
+        low_memory=False,
+        # or
+        # dtype=dict(PBSPRO_FIELD_TYPES, **PBSPRO_MESSAGE_TEXT_TYPES)
+    )
+
+    for c in ['ctime', 'etime', 'qtime', 'start', 'end']:
+        df_reduced[c] = pd.to_datetime(df_reduced[c],
+                                       unit='s',
+                                       utc=True,
+                                       errors='raise')
+
+    def write_to_excel(df_reduced):
+        """
+            PRINT TO EXCEL
+        """
+        writer = pd.ExcelWriter('reduced_res.xlsx', engine='xlsxwriter')
+        df_reduced.to_excel(writer)
+
+        col = df_reduced.columns.get_loc('exec_host')+1
+        last_row = len(df_reduced['exec_host'])
+
+        format1 = writer.book.add_format({'bg_color': '#FFC7CE',
+                                          'font_color': '#9C0006'})
+        worksheet = writer.sheets['Sheet1']
+        # worksheet.conditional_format(1, col, last_row, col,
+        #                              {'type': 'text',
+        #                               'criteria': 'containing',
+        #                               'value': 'bio519',
+        #                               'format': format1})
+        worksheet.conditional_format(1, col, last_row, col,
+                                     {'type': 'blanks',
+                                      'format': format1})
+        writer.save()
+
+    def split_id_string(df_reduced):
+        """
+            SPLIT id_string
+        """
+        # split id_string. 'jobIdData' is a new DataFrame
+        jobIdData = df_reduced['id_string'].str.split('.',
+                                                      expand=True)
+        jobIdData.columns = ["sequence", "host"]
+
+        # check if first part is job_id.[array_index] (or job_id-array_index)
+        # or job_id[]
+
+        with pd.option_context("display.max_rows", 100,
+                               "display.max_columns", 5):
+            mask = jobIdData['sequence'].str.contains('[\[\]]')
+            tmp = jobIdData['sequence'].str.extract(
+                '(?P<job_id>\d+)\[?(?P<array_index>\d+)?\]?',
+                expand=True
+            )
+            jobIdData['job_id'] = tmp['job_id']
+            jobIdData['array_index'] = tmp['array_index']
+            print jobIdData[mask]
+
+    def check_time_problems(df_reduced):
+        """
+            PROBLEMS WITH times
+            Here we also know that jobs with start=0
+            have empty 'exec_host' fields
+        """
+        df_sel = df_reduced[df_reduced['etime'] > df_reduced['start']]
+
+        col_sel = ['id_string', 'ctime', 'qtime', 'etime', 'start', 'end',
+                   'exec_host']
+        print df_sel[col_sel].to_string()
+        print len(df_sel)
+
+    def parse_hostlist(reduced_res):
+        """
+            Parse 'exec_host' data.
+            Jobs with field start=0, found in routine 'check_time_problems',
+            do not have 'hostlist' information (NULL) as well
+        """
+        def parseExecHost(exec_hosts):
+            """
+            Mimic Shredder/Pbs.php (OpenXDMod 6.5)
+            """
+            hostList = []
+            nodeCpus = {}
+            nodeCount = cpuCount = 0
+            for vnode in exec_hosts:
+                (host, cpupart) = vnode.split('/')
+                ic = cpupart.split('*')
+                if len(ic) == 1:
+                    ic.append(1)
+                for cnt in range(int(ic[1])):
+                    hc = {'node': host, 'cpu': '{0}.{1}'.format(ic[0], cnt+1)}
+                    hostList.append(hc)
+                    if host in nodeCpus:
+                        nodeCpus[host] += 1
+                    else:
+                        nodeCpus[host] = 1
+                        nodeCount += 1
+                cpuCount += int(ic[1])
+            # nodeCount
+            nodeCount = len(nodeCpus.keys())
+            nodes = ','.join(nodeCpus.keys())
+            return({'host_list': hostList,
+                    'node_list': nodes,
+                    'node_count': nodeCount,
+                    'cpu_count': cpuCount})
+
+        data = df_reduced['exec_host'].str.split('+', expand=False)
+        with pd.option_context("display.max_rows", 20,
+                               "max_colwidth", 500):
+            print data.apply(lambda x: parseExecHost(x))
+
+    def parseMemory(reduced_res):
+        """
+            job 5337.veredas0 (accounting/20100913) has
+            no info in memory fields
+        """
+        def scaleMemory(x):
+            """ x = [quantity, unit]
+                when np.nan occurs the integer column
+                is recasted to float
+            """
+            return {
+                'b': lambda: int(x[0]),
+                'kb': lambda: int(x[0])*1024,
+                'mb': lambda: int(x[0])*1024*1024,
+                'gb': lambda: int(x[0])*1024*1024*1024,
+                'tb': lambda: int(x[0])*1024*1024*1024*1024,
+            }.get(x[1], lambda: np.nan)()
+
+        for mem_col in ['resources_used.vmem', 'resources_used.mem',
+                        'Resource_List.mem', 'Resource_List.mem']:
+            if mem_col in df_reduced.columns:
+                mask = df_reduced[mem_col].isnull()
+                if mask.any():
+                    print 'df_reduced[{0}] has NULLs'.format(mem_col)
+                tmp = df_reduced[mem_col].str.extract(
+                    '(?P<quantity>\d*\.?\d+)(?P<unit>\D+)?$',
+                    expand=False
+                )
+                tmp = tmp.apply(scaleMemory, axis=1)
+                print tmp
+
+    def parseTime(reduced_res):
+        for time_col in ['resources_used.cput', 'resources_used.walltime',
+                         'Resource_List.pcput', 'Resource_List.cput',
+                         'Resource_List.walltime']:
+            if time_col in df_reduced.columns:
+                mask = df_reduced[time_col].isnull()
+                if mask.any():
+                    print 'df_reduced[{0}] has NULLs'.format(time_col)
+                    print 'TOTAL len(df_reduced[{0}]={1}'.format(
+                        time_col, len(df_reduced)
+                    )
+                    print 'len(df_reduced[{0}]={1}'.format(
+                        time_col, len(df_reduced[mask])
+                    )
+
+    # check_time_problems(df_reduced)
+    # mask = df_reduced['exec_host'].isnull()
+    # df_reduced = df_reduced[~mask]
+    # parseMemory(df_reduced)
+    # parseTime(df_reduced)
+
+    PBSPRO_FIELD_NAMES.pop()
+    PBSPRO_FIELD_NAMES.extend(PBSPRO_MESSAGE_TEXT_NAMES)
+    print set(PBS_XDMOD_COLUMNS).difference(set(PBSPRO_FIELD_NAMES))
 
 
 if __name__ == '__main__':
