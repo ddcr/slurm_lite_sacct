@@ -214,7 +214,7 @@ def work_sacct(datetime_t, sacct_fmt='sacct.exe', outdir='',
                     time.sleep(2)
                     return(a)
     else:
-        return('PASSING: FIle {0} exists'.format(fileout))
+        return('SKIPPING: File {0} exists'.format(fileout))
 
 
 def use_multiprocessing():
@@ -249,7 +249,6 @@ def use_concurrent():
 
     cmd_sacct = get_sacct_cmd()
     kwds = {'sacct_fmt': cmd_sacct}
-    # for y in [2011]:
     for y in [2011, 2012, 2013, 2014, 2015, 2016, 2017]:
         #
         # First create the output directory
@@ -266,7 +265,7 @@ def use_concurrent():
                 sys.exit(1)
 
         if y == 2017:
-            month_upper = 3
+            month_upper = 5
         else:
             month_upper = 13
 

@@ -7,6 +7,9 @@ import click
 import inspect
 from collections import OrderedDict
 import numpy as np
+import subprocess
+import time
+import textwrap
 
 
 LOGPATH = os.path.abspath(os.path.join(os.path.dirname(__file__),
@@ -64,7 +67,7 @@ PBS_XDMOD_COLUMNS = [
     'start',
     'end',
     'etime',
-    'exit_status',
+    'Exit_status',
     'session',
     'requestor',
     'jobname',
@@ -229,6 +232,10 @@ PBSPRO_MESSAGE_TEXT_TYPES = OrderedDict(
      ('resources_used.cpupercent', np.int64)])
 empty_row = dict((k, np.nan) for k in PBSPRO_MESSAGE_TEXT_NAMES)
 pd.options.display.max_rows = 5
+
+
+class MyError(Exception):
+    pass
 
 
 @click.group()
@@ -671,7 +678,7 @@ def work(csvfile):
         def scaleMemory(x):
             """ x = [quantity, unit]
                 when np.nan occurs the integer column
-                is recasted to float
+                is recast to float
             """
             return {
                 'b': lambda: int(x[0]),
@@ -715,9 +722,60 @@ def work(csvfile):
     # parseMemory(df_reduced)
     # parseTime(df_reduced)
 
-    PBSPRO_FIELD_NAMES.pop()
-    PBSPRO_FIELD_NAMES.extend(PBSPRO_MESSAGE_TEXT_NAMES)
-    print set(PBS_XDMOD_COLUMNS).difference(set(PBSPRO_FIELD_NAMES))
+    # PBSPRO_FIELD_NAMES.pop()
+    # PBSPRO_FIELD_NAMES.extend(PBSPRO_MESSAGE_TEXT_NAMES)
+    # print set(PBS_XDMOD_COLUMNS).difference(set(PBSPRO_FIELD_NAMES))
+
+
+@cli.command('shred')
+@click.argument("rootdir", default='accounting')
+def xdmod_shredder(rootdir):
+    """
+        Shred PBS files for OpenXDMod
+        xdmod-shredder logs to the console
+    """
+    cmd_options = ['--dry-run',
+                   '-r veredas',
+                   '-f pbs']
+    cmd_options_string = ' '.join(cmd_options)
+    cmd = ['xdmod_shredder',
+           '-v',
+           '-d',
+           cmd_options_string
+           ]
+
+    # Geting files
+    dates = pd.date_range('2008-5-23', '2012-12-05', freq='D').tolist()
+    dates = [os.path.join(rootdir, d.strftime('%Y%m%d')) for d in dates]
+    for filename in dates:
+        if not os.path.isfile(filename) or os.path.getsize(filename) == 0:
+            continue
+        logger = os.path.fileext
+        cmd_string = '{0} -i {1}'.format(' '.join(cmd), filename)
+        with open(logger, 'wb') as flog:
+            try:
+                subprocess.check_call(cmd_string,
+                                      shell=True,
+                                      stdout=flog,
+                                      stderr=flog)
+            except subprocess.CalledProcessError as e:
+                a = textwrap.dedent("""\
+                                    {0}:
+                                      Error code raised: {1}
+                                      Need to remove file:
+                                      {2}
+                                    """.format(e.cmd,
+                                               e.returncode,
+                                               filename))
+                raise MyError(a)
+            else:
+                a = textwrap.dedent("""\
+                                    {0}:
+                                       Finished
+                                    """.format(' '.join(cmd)))
+            finally:
+                time.sleep(2)
+                return(a)
 
 
 if __name__ == '__main__':

@@ -468,27 +468,32 @@ def parse_correct_jcomp(jobcompfile):
                       "Partition", "TimeLimit", "StartTime", "EndTime",
                       "NodeList", "NodeCnt", "ProcCnt", "WorkDir"]
 
-    jobcompfile_basename = os.path.splitext(jobcompfile)[0]
-    jobcompfile_correct = jobcompfile_basename + '.corr.log'
-    jobcompfile_sql = jobcompfile_basename + '.corr.sql'
-    jobcompfile_sql_undo = jobcompfile_basename + '.corr.undo.sql'
+    # jobcompfile_basename = os.path.splitext(jobcompfile)[0]
+    # jobcompfile_correct = jobcompfile_basename + '.corr.log'
+    # jobcompfile_sql = jobcompfile_basename + '.corr.sql'
+    # jobcompfile_sql_undo = jobcompfile_basename + '.corr.undo.sql'
 
     # Find JobIds for which the fields 'Name', 'WorkDir' have garbled text
     # and then correct them. Write corrections back to logfile and
     # write a SQL script to correct the database 'slurm_acct_db'
 
     start = time.clock()
-    with open(jobcompfile_correct, 'wb') as out_fd:
-        with open(jobcompfile_sql, 'wb') as sql_fd:
-            with open(jobcompfile_sql_undo, 'wb') as undo_sql_fd:
-                with open(jobcompfile, 'rb') as in_fd:
-                    for record in csv.reader(in_fd, delimiter=' '):
-                        kv_pairs = OrderedDict(s.split('=', 1) for s in record
-                                               if '=' in s)
-                        # if len(kv_pairs) == 13:
-                        #     continue
+    # with open(jobcompfile_correct, 'wb') as out_fd:
+    #     with open(jobcompfile_sql, 'wb') as sql_fd:
+    #         with open(jobcompfile_sql_undo, 'wb') as undo_sql_fd:
+    with open(jobcompfile, 'rb') as in_fd:
+        for record in csv.reader(in_fd, delimiter=' '):
+            kv_pairs = OrderedDict(s.split('=', 1) for s in record
+                                   if '=' in s)
 
-                        print '{}'.format(kv_pairs)
+            if len(kv_pairs) == 13:
+                if set(kv_pairs.keys()) != set(JOBCOMP_FIELDS):
+                    print('PROBLEM')
+                    print record
+                    sys.exit(1)
+                else:
+                    continue
+
     print 'Time = ', time.clock() - start
 
 
