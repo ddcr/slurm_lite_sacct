@@ -13,6 +13,8 @@ import click
 import sys
 import inspect
 import shutil
+import StringIO
+import ConfigParser
 
 LOGPATH = os.path.abspath(os.path.join(os.path.dirname(__file__),
                           'sacct_outputs'))
@@ -495,6 +497,36 @@ def parse_correct_jcomp(jobcompfile):
                     continue
 
     print 'Time = ', time.clock() - start
+
+
+class SlurmDBDConf(ConfigParser.ConfigParser, object):
+    def __init__(self, filename):
+        super(SlurmDBDConf, self).__init__()
+        self.filename = filename
+
+    def read(self):
+        if not os.path.exists(self.filename):
+            raise Exception('File "%s" does not exist' % (self.filename))
+        with open(self.filename) as fd:
+            stream = StringIO.StringIO("[slurm]\n" + fd.read())
+            super(self.__class__, self).readfp(stream)
+
+
+@cli.command()
+def mytest():
+    config = SlurmDBDConf('etc/slurm/slurm.conf')
+    config.read()
+    dbhost = 'localhost'
+    dbport = int(config.get('slurm', 'accountingstorageport'))
+    dbname = config.get('slurm', 'accountingstorageloc')
+    dbuser = config.get('slurm', 'accountingstorageuser')
+    dbpass = config.get('slurm', 'accountingstoragepass', None)
+
+    print 'dbhost = {}'.format(dbhost)
+    print 'dbport = {}'.format(dbport)
+    print 'dbname = {}'.format(dbname)
+    print 'dbuser = {}'.format(dbuser)
+    print 'dbpass = {}'.format(dbpass)
 
 
 if __name__ == '__main__':
