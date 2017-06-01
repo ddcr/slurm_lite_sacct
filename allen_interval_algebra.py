@@ -2,53 +2,55 @@ class AllenIntervalRules(object):
     """Assume that x, y are of tuples
     """
     @staticmethod
-    def ContainedBy(x, y):
+    def containedby(x, y):
         return (x[0] > y[0]) and (x[1] < y[1])
 
     @staticmethod
-    def Contains(x, y):
+    def contains(x, y):
         return (y[0] > x[0]) and (y[1] < x[1])
 
     @staticmethod
-    def FinishedBy(x, y):
+    def finishedby(x, y):
         return (y[1] == x[1]) and (y[0] > x[0])
 
     @staticmethod
-    def Finishes(x, y):
+    def finishes(x, y):
         return (x[1] == y[1]) and (x[0] > y[0])
 
     @staticmethod
-    def IsEqualTo(x, y):
+    def isequalto(x, y):
         return (x[0] == y[0]) and (x[1] == y[1])
 
     @staticmethod
-    def Meets(x, y):
+    def meets(x, y):
         return (x[1] == y[0])
 
     @staticmethod
-    def MetBy(x, y):
+    def metby(x, y):
         return (y[1] == x[0])
 
     @staticmethod
-    def OverlapedBy(x, y):
+    def overlapedby(x, y):
         return (y[0] < x[0]) and ((y[1] > x[0]) and (y[1] < x[1]))
 
     @staticmethod
-    def Overlaps(x, y):
+    def overlaps(x, y):
         return (x[0] < y[0]) and ((x[1] > y[0]) and (x[1] < y[1]))
 
     @staticmethod
-    def StartedBy(x, y):
+    def startedby(x, y):
         return (y[0] == x[0]) and (y[1] < x[1])
 
     @staticmethod
-    def Starts(x, y):
+    def starts(x, y):
         return (x[0] == y[0]) and (x[1] < y[1])
 
     @staticmethod
-    def TakesPlaceAfter(x, y):
+    def takesplaceafter(x, y):
+        """preceded by"""
         return x[0] > y[1]
 
     @staticmethod
-    def TakesPlaceBefore(x, y):
+    def takesplacebefore(x, y):
+        """preceds"""
         return x[1] < y[0]

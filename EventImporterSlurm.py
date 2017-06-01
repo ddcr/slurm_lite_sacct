@@ -3,7 +3,7 @@
 # @Author: ddcr
 # @Date:   2017-04-10 20:15:22
 # @Last Modified by:   ddcr
-# @Last Modified time: 2017-05-29 21:52:08
+# @Last Modified time: 2017-05-31 23:50:53
 #
 # These snippets have been imported from HPCStats
 # (https://github.com/edf-hpc/hpcstats) with
@@ -20,6 +20,8 @@ import StringIO
 import os
 import logging
 import pandas as pd
+from collections import defaultdict
+
 
 logging.basicConfig(filename='exemplo.log',
                     filemode='w',
@@ -620,7 +622,7 @@ def test0(events):
     import pprint
 
     pp = pprint.PrettyPrinter(indent=4)
-    intervals = dict()
+    intervals = defaultdict(list)
     for e in events:
         ev_type = e.event_type
         # exclude UNKNOWN event types (usually the reason is 'cold-start'
@@ -639,19 +641,15 @@ def test0(events):
         # if reason in ['(null)', 'cold-start']:
         #     print mystr.format(node, reason, dt, start_time, end_time
 
-        if dt not in intervals:
-            # intervals[dt] = [(node, reason, start_time, end_time)]
-            intervals[start_time] = [(node, reason, dt)]
-        else:
-            # intervals[dt].append((node, reason, start_time, end_time))
-            intervals[start_time].append((node, reason, dt))
+        # intervals[dt].append((node, reason, start_time, end_time))
+        intervals[start_time].append((node, reason, dt))
     pp.pprint(intervals)
 
 
 def test1(events):
     """TEST1
     """
-    edata = dict()
+    edata = defaultdict(list)
     for e in events:
         ev_type = e.event_type
         # if ev_type in ['UNKNOWN']:
@@ -662,9 +660,6 @@ def test1(events):
         node = e.node.name
 
         if ev_type in ['UNKNOWN']:
-            if dt not in edata:
-                edata[dt] = [node]
-            else:
                 edata[dt].append(node)
 
     for k in sorted(edata.iterkeys()):
@@ -675,12 +670,14 @@ def test1(events):
         print '{0}: {1} ({2})'.format(k_1, 8*len(edata[k]), edata[k])
 
 
-def events2df(events):
-    """Collect all events into a dictionary of pandas DataFrames
+def collect_events_to_df(events):
+    """For each node collects the events into a convenient pandas DataFrame
+        sorted by the starting time of the event.
+        Merge all dataframes in a python dictionary.
     """
     import natsort
 
-    node_events = dict()
+    node_events = defaultdict(list)
     col_names = ['ts', 'te', 'cpu', 'event_type', 'reason']
     for e in events:
         ev_type = e.event_type
@@ -691,10 +688,7 @@ def events2df(events):
 
         t = (start_time, end_time, 8, ev_type, reason)
 
-        if node_name not in node_events:
-            node_events[node_name] = [t]
-        else:
-            node_events[node_name].append(t)
+        node_events[node_name].append(t)
 
     # now for each node sort list of tuples by start_time
     nodes_df = dict()
@@ -705,7 +699,7 @@ def events2df(events):
     return(nodes_df)
 
 
-def import_events(config):
+def import_events_from_mysql(config):
     """read events from mysql database
     """
     cluster = Cluster('veredas')
@@ -714,6 +708,128 @@ def import_events(config):
     eventobj.load()
     events = eventobj.events
     return(events)
+
+
+def df_merge_events1(df_node):
+    """Merge events when their time spans intersect or touch
+    """
+    t_limits = df_node[['ts', 'te']]
+    t_span = list(t_limits.itertuples(index=False))
+    lm = len(t_span)
+    indices_deleted = []
+    for i in xrange(lm):
+        if i in indices_deleted:
+            raise 'a[{}] was deleted'.format(i)
+        for j in xrange(i+1, lm):
+            print 'indices_deleted = {}'.format(indices_deleted)
+            print 'a[{0}] against a[{1}]'.format(i, j)
+            if j in indices_deleted:
+                raise 'a[{}] was deleted'.format(j)
+
+            a = t_span[i]
+            b = t_span[j]
+
+            if allen.takesplaceafter(a, b):
+                raise 'Sanity check: The DataFrame is not properly sorted'
+
+            if allen.takesplacebefore(a, b):
+                """no need to pursue further: all incoming intervals
+                   obey this rule, so no further interval union is
+                   going to be necessary"""
+                print '\n\tNext a'
+                print '-'*120
+                break
+
+            delete_a = False
+            for check_method in ['containedby', 'contains', 'finishedby',
+                                 'finishes', 'isequalto', 'meets', 'metby',
+                                 'overlapedby', 'overlaps', 'startedby',
+                                 'starts']:
+                check = getattr(allen, check_method)
+                if check(a, b):
+                    print '\ta[{0}]=({1}, {2}) a[{3}]=({4}, {5})'.format(
+                        i, a.ts, a.te, j, b.ts, b.te)
+
+                    if check_method in ['meets', 'overlaps',
+                                        'finishedby', 'starts']:
+                        print '\t{0} {1} {2}'.format(i, check_method, j)
+                        print '\t\t new a[{0}]=({1}, {2})'.format(
+                            j, a.ts, b.te)
+                        print '\t\t a[{0}] is enlarged'.format(j)
+                        print '\t\t a[{0}] is DELETED'.format(i)
+                        delete_a = True
+                        indices_deleted.append(i)
+                    elif check_method == 'contains':
+                        print '\t{0} {1} {2}'.format(i, check_method, j)
+                        print '\t\t new a[{0}]=({1}, {2})'.format(
+                            j, a.ts, a.te)
+                        print '\t\t a[{0}] COPIED TO a[{1}]'.format(i, j)
+                        print '\t\t a[{0}] is DELETED'.format(i)
+                        delete_a = True
+                        indices_deleted.append(i)
+                    else:
+                        raise NotImplementedError
+                    print '-'*120
+            if delete_a:
+                break
+
+
+def df_merge_events2(df_node):
+    """Merge events when their time spans intersect or touch
+    """
+
+    lm1 = len(df_node)-1
+    indices_deleted = []
+    for i in xrange(lm1):
+        i1 = i+1
+
+        if i in indices_deleted:
+            raise 'a[{}] was deleted'.format(i)
+        if i1 in indices_deleted:
+            raise 'a[{}] was deleted'.format(i1)
+
+        print 'indices_deleted = {}'.format(indices_deleted)
+        print 'a[{0}] against a[{1}]'.format(i, i1)
+
+        a = tuple(df_node.iloc[i, [0, 1]])
+        b = tuple(df_node.iloc[i1, [0, 1]])
+
+        if allen.takesplaceafter(a, b):
+            raise 'Sanity check: The DataFrame is not properly sorted'
+
+        for check_method in ['containedby', 'contains', 'finishedby',
+                             'finishes', 'isequalto', 'meets', 'metby',
+                             'overlapedby', 'overlaps', 'startedby',
+                             'starts']:
+            check = getattr(allen, check_method)
+
+            if check(a, b):
+                print '\ta[{0}]=({1}, {2}) a[{3}]=({4}, {5})'.format(
+                    i, a[0], a[1], i1, b[0], b[1])
+
+                if check_method in ['meets', 'overlaps',
+                                    'finishedby', 'starts']:
+                    print '\t{0} {1} {2}'.format(i, check_method, i1)
+                    print '\t\t new a[{0}]=({1}, {2})'.format(
+                        i1, a[0], b[1])
+                    df_node.loc[i1, 'ts'] = df_node.loc[i, 'ts']
+                    print '\t\t a[{0}] is enlarged'.format(i1)
+                    print '\t\t a[{0}] is DELETED'.format(i)
+                    indices_deleted.append(i)
+                elif check_method == 'contains':
+                    print '\t{0} {1} {2}'.format(i, check_method, i1)
+                    print '\t\t new a[{0}]=({1}, {2})'.format(
+                        i1, a[0], a[1])
+                    df_node.loc[i1] = df_node.loc[i]
+                    print '\t\t a[{0}] COPIED TO a[{1}]'.format(i, i1)
+                    print '\t\t a[{0}] is DELETED'.format(i)
+                    indices_deleted.append(i)
+                else:
+                    raise NotImplementedError
+        print '-'*120
+
+    # now remove rows and reindex
+    df_node.drop(df_node.index[indices_deleted], inplace=True)
 
 
 if __name__ == '__main__':
@@ -728,36 +844,30 @@ if __name__ == '__main__':
 
     events_pkl_file = 'dic_of_node_events.pkl'
     if not os.path.exists(events_pkl_file):
+        print "'{0}' not found ... recreating ".format(events_pkl_file)
         config = SlurmDBDConf('etc/slurm/slurm.conf')
         config.read()
 
         # import events and serialie
-        events = import_events(config)
+        events = import_events_from_mysql(config)
         # save them
-        nodes_df = events2df(events)
+        nodes_df = collect_events_to_df(events)
         with open(events_pkl_file, 'wb') as fout:
             pickle.dump(nodes_df, fout)
 
     with open(events_pkl_file, 'rb') as fin:
         nodes_df = pickle.load(fin)
 
-    tdelta_bins = [pd.Timedelta(0),
-                   pd.Timedelta('1 minute'),
-                   pd.Timedelta('1 hour'),
-                   pd.Timedelta('1 day'),
-                   pd.Timedelta('7 days'),
-                   pd.Timedelta('30 days'),
+    tdelta_bins = [pd.Timedelta(0), pd.Timedelta('1 minute'),
+                   pd.Timedelta('1 hour'), pd.Timedelta('1 day'),
+                   pd.Timedelta('7 days'), pd.Timedelta('30 days'),
                    pd.Timedelta('60 days')]
-    tdelta_categories = ['<1m',
-                         '<1h',
-                         '<1d',
-                         '<1w',
-                         '<30d',
-                         '<60d']
+    tdelta_categories = ['<1m', '<1h', '<1d', '<1w', '<30d', '<60d']
 
     for node_name in natsort.natsorted(nodes_df.iterkeys()):
         print '{}'.format(node_name)
 
+        # determine event duration
         df_node = nodes_df[node_name]
         diff_tv = df_node.te-df_node.ts
         # do binning
@@ -765,35 +875,23 @@ if __name__ == '__main__':
                                bins=tdelta_bins,
                                labels=tdelta_categories)
 
-        # remove rows with intervals less than one minute
+        # remove events with duration less than one minute
         df_node = df_node[~(df_node.dt == '<1m')]
+        df_node.reset_index(inplace=True, drop=True)
 
-        # check if some rows can be merged
-        times = df_node[['ts', 'te']]
-        intervals = list(times.itertuples(index=False))
-        lm = len(intervals)
-        trapped = False
-        for i in xrange(lm):
-            for j in xrange(i+1, lm):
-                x = intervals[i]
-                y = intervals[j]
+        df_node.to_csv('processed.csv',
+                       mode='a',
+                       header=False,
+                       sep='\t')
+        # Now merge/delete events in the timeline
+        df_merge_events2(df_node)
+        df_node.to_csv('processed.n.csv',
+                       mode='a',
+                       header=False,
+                       sep='\t')
 
-                for check_method in ['ContainedBy', 'Contains', 'FinishedBy',
-                                     'Finishes', 'IsEqualTo', 'Meets', 'MetBy',
-                                     'OverlapedBy', 'Overlaps', 'StartedBy',
-                                     'Starts']:
-                    check = getattr(allen, check_method)
-                    if check(x, y):
-                        print '[{0},{1}] {2}: {3} -- {4}'.format(i, j,
-                                                                 check_method,
-                                                                 x, y)
-                        trapped = True
-        if trapped:
-            with pd.option_context('display.max_rows', None,
-                                   'display.max_columns', 6):
-                print df_node[['ts', 'te', 'dt', 'reason']]
-        print '-'*80
-        print pd.value_counts(df_node['dt'])
-        print '-'*80
-        print df_node.info()
+        # with pd.option_context('display.max_rows', None,
+        #                        'display.max_columns', 6,
+        #                        'display.width', 132):
+        #     print df_node[['ts', 'te', 'dt', 'reason']]
         print '='*80
