@@ -3,7 +3,7 @@
 # @Author: ddcr
 # @Date:   2017-04-10 20:15:22
 # @Last Modified by:   ddcr
-# @Last Modified time: 2017-05-31 23:50:53
+# @Last Modified time: 2017-06-09 16:33:58
 #
 # These snippets have been imported from HPCStats
 # (https://github.com/edf-hpc/hpcstats) with
@@ -20,6 +20,7 @@ import StringIO
 import os
 import logging
 import pandas as pd
+import numpy as np
 from collections import defaultdict
 
 
@@ -616,6 +617,22 @@ class EventImporterSlurm(EventImporter):
         return '+'.join(states)
 
 
+def read_all(pattern='trace_dir/veredas*.csv'):
+    """Reads all of the CSVs in a directory matching the file pattern
+    as TimeSeries
+    """
+    import glob
+
+    # result = []
+    for filename in glob.iglob(pattern):
+        print 'reading {}'.format(filename)
+        # ts = traces.TimeSeries.from_csv(
+        #     filename,
+        #     time_column
+        #     )
+    pass
+
+
 def test0(events):
     """TEST0
     """
@@ -710,92 +727,26 @@ def import_events_from_mysql(config):
     return(events)
 
 
-def df_merge_events1(df_node):
+def df_merge_events(df_node):
     """Merge events when their time spans intersect or touch
     """
-    t_limits = df_node[['ts', 'te']]
-    t_span = list(t_limits.itertuples(index=False))
-    lm = len(t_span)
-    indices_deleted = []
-    for i in xrange(lm):
-        if i in indices_deleted:
-            raise 'a[{}] was deleted'.format(i)
-        for j in xrange(i+1, lm):
-            print 'indices_deleted = {}'.format(indices_deleted)
-            print 'a[{0}] against a[{1}]'.format(i, j)
-            if j in indices_deleted:
-                raise 'a[{}] was deleted'.format(j)
-
-            a = t_span[i]
-            b = t_span[j]
-
-            if allen.takesplaceafter(a, b):
-                raise 'Sanity check: The DataFrame is not properly sorted'
-
-            if allen.takesplacebefore(a, b):
-                """no need to pursue further: all incoming intervals
-                   obey this rule, so no further interval union is
-                   going to be necessary"""
-                print '\n\tNext a'
-                print '-'*120
-                break
-
-            delete_a = False
-            for check_method in ['containedby', 'contains', 'finishedby',
-                                 'finishes', 'isequalto', 'meets', 'metby',
-                                 'overlapedby', 'overlaps', 'startedby',
-                                 'starts']:
-                check = getattr(allen, check_method)
-                if check(a, b):
-                    print '\ta[{0}]=({1}, {2}) a[{3}]=({4}, {5})'.format(
-                        i, a.ts, a.te, j, b.ts, b.te)
-
-                    if check_method in ['meets', 'overlaps',
-                                        'finishedby', 'starts']:
-                        print '\t{0} {1} {2}'.format(i, check_method, j)
-                        print '\t\t new a[{0}]=({1}, {2})'.format(
-                            j, a.ts, b.te)
-                        print '\t\t a[{0}] is enlarged'.format(j)
-                        print '\t\t a[{0}] is DELETED'.format(i)
-                        delete_a = True
-                        indices_deleted.append(i)
-                    elif check_method == 'contains':
-                        print '\t{0} {1} {2}'.format(i, check_method, j)
-                        print '\t\t new a[{0}]=({1}, {2})'.format(
-                            j, a.ts, a.te)
-                        print '\t\t a[{0}] COPIED TO a[{1}]'.format(i, j)
-                        print '\t\t a[{0}] is DELETED'.format(i)
-                        delete_a = True
-                        indices_deleted.append(i)
-                    else:
-                        raise NotImplementedError
-                    print '-'*120
-            if delete_a:
-                break
-
-
-def df_merge_events2(df_node):
-    """Merge events when their time spans intersect or touch
-    """
+    from allen_interval_algebra import AllenIntervalRules as allen
 
     lm1 = len(df_node)-1
     indices_deleted = []
     for i in xrange(lm1):
         i1 = i+1
 
-        if i in indices_deleted:
-            raise 'a[{}] was deleted'.format(i)
-        if i1 in indices_deleted:
-            raise 'a[{}] was deleted'.format(i1)
-
-        print 'indices_deleted = {}'.format(indices_deleted)
-        print 'a[{0}] against a[{1}]'.format(i, i1)
-
         a = tuple(df_node.iloc[i, [0, 1]])
         b = tuple(df_node.iloc[i1, [0, 1]])
 
         if allen.takesplaceafter(a, b):
             raise 'Sanity check: The DataFrame is not properly sorted'
+
+        # if allen.takesplacebefore(a, b):
+        #     dt = b[0] - a[1]
+        #     if dt < pd.Timedelta('1 minute'):
+        #         print 'too close'
 
         for check_method in ['containedby', 'contains', 'finishedby',
                              'finishes', 'isequalto', 'meets', 'metby',
@@ -804,59 +755,27 @@ def df_merge_events2(df_node):
             check = getattr(allen, check_method)
 
             if check(a, b):
-                print '\ta[{0}]=({1}, {2}) a[{3}]=({4}, {5})'.format(
-                    i, a[0], a[1], i1, b[0], b[1])
-
                 if check_method in ['meets', 'overlaps',
                                     'finishedby', 'starts']:
-                    print '\t{0} {1} {2}'.format(i, check_method, i1)
-                    print '\t\t new a[{0}]=({1}, {2})'.format(
-                        i1, a[0], b[1])
                     df_node.loc[i1, 'ts'] = df_node.loc[i, 'ts']
-                    print '\t\t a[{0}] is enlarged'.format(i1)
-                    print '\t\t a[{0}] is DELETED'.format(i)
+                    df_node.loc[i1, 'key'] = 'ENLARGE'
+                    df_node.loc[i, 'key'] = 'DEL LATER'
                     indices_deleted.append(i)
                 elif check_method == 'contains':
-                    print '\t{0} {1} {2}'.format(i, check_method, i1)
-                    print '\t\t new a[{0}]=({1}, {2})'.format(
-                        i1, a[0], a[1])
                     df_node.loc[i1] = df_node.loc[i]
-                    print '\t\t a[{0}] COPIED TO a[{1}]'.format(i, i1)
-                    print '\t\t a[{0}] is DELETED'.format(i)
+                    df_node.loc[i1, 'key'] = 'CONTAINED: SURVIVAL'
+                    df_node.loc[i, 'key'] = 'CONTAINS: DEL LATER'
                     indices_deleted.append(i)
                 else:
                     raise NotImplementedError
-        print '-'*120
-
     # now remove rows and reindex
     df_node.drop(df_node.index[indices_deleted], inplace=True)
 
 
-if __name__ == '__main__':
-    import cPickle as pickle
+def process_all_nodes_events(nodes_df, csvfile='cluster_events.csv'):
+    """Work out all nodes events
+    """
     import natsort
-    from allen_interval_algebra import AllenIntervalRules as allen
-
-    # node_df = events_df(events)['veredas2']
-    # result = pd.Series(0,
-    #                   index=pd.date_range(node_df.ts.min(), node_df.te.max(),
-    #                                        freq='H'))
-
-    events_pkl_file = 'dic_of_node_events.pkl'
-    if not os.path.exists(events_pkl_file):
-        print "'{0}' not found ... recreating ".format(events_pkl_file)
-        config = SlurmDBDConf('etc/slurm/slurm.conf')
-        config.read()
-
-        # import events and serialie
-        events = import_events_from_mysql(config)
-        # save them
-        nodes_df = collect_events_to_df(events)
-        with open(events_pkl_file, 'wb') as fout:
-            pickle.dump(nodes_df, fout)
-
-    with open(events_pkl_file, 'rb') as fin:
-        nodes_df = pickle.load(fin)
 
     tdelta_bins = [pd.Timedelta(0), pd.Timedelta('1 minute'),
                    pd.Timedelta('1 hour'), pd.Timedelta('1 day'),
@@ -864,34 +783,147 @@ if __name__ == '__main__':
                    pd.Timedelta('60 days')]
     tdelta_categories = ['<1m', '<1h', '<1d', '<1w', '<30d', '<60d']
 
+    csvfile_orig = '{}.orig.csv'.format(csvfile[:-4])
+    csv_kw = {
+        'mode': 'a',
+        'header': False,
+        'columns': ['ts', 'te', 'node', 'reason', 'key'],
+        'sep': '\t'
+    }
+
+    traces_dir = 'traces_dir'
+    if not os.path.exists(traces_dir):
+        os.makedirs(traces_dir)
+
+    all_df_nodes = []
     for node_name in natsort.natsorted(nodes_df.iterkeys()):
         print '{}'.format(node_name)
 
-        # determine event duration
+        # == determine event duration
         df_node = nodes_df[node_name]
         diff_tv = df_node.te-df_node.ts
-        # do binning
+        # == do binning
         df_node['dt'] = pd.cut(diff_tv,
                                bins=tdelta_bins,
                                labels=tdelta_categories)
+        # internal key used for debugging
+        df_node['key'] = 'OK'
+        df_node['node'] = node_name
 
-        # remove events with duration less than one minute
+        # == remove events with duration less than one minute
         df_node = df_node[~(df_node.dt == '<1m')]
         df_node.reset_index(inplace=True, drop=True)
+        # append all dataframes for debugging
+        df_node.to_csv(csvfile_orig, **csv_kw)
 
-        df_node.to_csv('processed.csv',
-                       mode='a',
-                       header=False,
-                       sep='\t')
-        # Now merge/delete events in the timeline
-        df_merge_events2(df_node)
-        df_node.to_csv('processed.n.csv',
-                       mode='a',
-                       header=False,
-                       sep='\t')
+        # == Now merge/delete events in the timeline
+        df_merge_events(df_node)
+        all_df_nodes.append(df_node)
 
-        # with pd.option_context('display.max_rows', None,
-        #                        'display.max_columns', 6,
-        #                        'display.width', 132):
-        #     print df_node[['ts', 'te', 'dt', 'reason']]
-        print '='*80
+        # == create CSV file for each node in order to check
+        # == the package traces
+        traces_file = os.path.join(traces_dir, '{}.csv'.format(node_name))
+        df_node.to_csv(traces_file, **csv_kw)
+
+    df_cluster = pd.concat(all_df_nodes)
+    df_cluster.sort_values(['ts', 'te'], inplace=True)
+    # sort df_cluster wrt ts and te columns
+    csv_kw['header'] = True
+    df_cluster.to_csv(csvfile, **csv_kw)
+
+
+if __name__ == '__main__':
+    import cPickle as pickle
+    from hostlist import pd_collect_hosts
+    import sys
+
+    events_pkl_file = 'dic_of_node_events.pkl'
+    if not os.path.exists(events_pkl_file):
+        # import events and serialize
+        print "'{0}' not found ... recreating ".format(events_pkl_file)
+        config = SlurmDBDConf('etc/slurm/slurm.conf')
+        config.read()
+
+        events = import_events_from_mysql(config)
+        nodes_df = collect_events_to_df(events)
+
+        with open(events_pkl_file, 'wb') as fout:
+            pickle.dump(nodes_df, fout)
+
+    with open(events_pkl_file, 'rb') as fin:
+        nodes_df = pickle.load(fin)
+
+    df_cluster_events_file = 'cluster_events.csv'
+    if not os.path.exists(df_cluster_events_file):
+        process_all_nodes_events(nodes_df, df_cluster_events_file)
+
+    csv_kw_read = {'infer_datetime_format': True,
+                   'parse_dates': [0, 1],
+                   'delimiter': '\t',
+                   'engine': 'c',
+                   'usecols': ['ts', 'te', 'node']}
+
+    csv_kw_wrt = {'header': False,
+                  'index': False,
+                  'na_rep': 'MISSING',
+                  'sep': '\t'}
+
+    with open(df_cluster_events_file, 'r') as fin:
+        cluster_df = pd.read_csv(fin, **csv_kw_read)
+
+    csv_kw_wrt.update({'columns': ['ts', 'te', 'node']})
+    cluster_df.to_csv('prova_1.csv', **csv_kw_wrt)
+
+    # Step 1: aggregate all duplicated ['ts', 'te'] columns
+    grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
+    cluster_df = grouper_dup.agg({'node': pd_collect_hosts})
+    cluster_df.to_csv('prova_2.csv', **csv_kw_wrt)
+
+    # Step 2:
+    #  We are left with some near-duplicated values of 'te' for
+    #  each group of identical 'ts' values (differences of order of
+    #  one minute).
+    #  What follows is my attempt to identify those near-duplicated
+    #  values and change their values of 'te' to a common value.
+    #  This makes easy for latter aggregation of rows with same 'ts'
+    #  and 'te' (sure there is a cleaver way!)
+    dtmin = pd.Timedelta('15 minute')
+    grouper_near_dup = cluster_df.groupby('ts', as_index=False)
+    cluster_df['te_orig'] = cluster_df['te']
+    for _, grp in grouper_near_dup:
+        if len(grp) == 1:  # fine, next iteration
+            continue
+        te_ind = grp.te.index  # save indices of this group
+        te_len = len(te_ind)
+
+        # given value of 'te' build a list of rows with very close values
+        neighb_ind = [[] for a in range(te_len)]
+        for i in range(te_len):
+            i1 = i+1
+            dt = grp.loc[te_ind[i1:], 'te'] - grp.loc[te_ind[i], 'te']
+            dt = dt[dt < dtmin]  # collect only very close values
+            neighb_ind[i] = dt.index.tolist()
+
+        # sweep neighbours list and update values of 'te'
+        for i in range(te_len):
+            if len(neighb_ind[i]) > 0:
+                te_indi = te_ind[i]
+                te_indiv = cluster_df.loc[te_indi, 'te']
+                cluster_df.loc[neighb_ind[i], 'te'] = te_indiv
+
+    cluster_df.to_csv('loga_3.csv', **csv_kw_wrt)
+    dt = cluster_df['te_orig']-cluster_df['te']
+    print '===> {0} {1}'.format(dt.min(), dt.max())
+    print '---> {0}'.format(len(dt[dt > dtmin]))
+
+    sys.exit(1)
+    # Step 3:
+    #   now we are in condition to aggregate again, like in Step 1
+    grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
+    cluster_df = grouper_dup.agg({'node': pd_collect_hosts})
+    cluster_df.to_csv('prova_3.csv', **csv_kw_wrt)
+
+    # debug 1
+    cluster_df['precede'] = cluster_df['te'] - cluster_df['ts'].shift(-1)
+    csv_kw_wrt.update({'columns': ['ts', 'te', 'precede']})
+    cluster_df.to_csv('prova_4.csv', **csv_kw_wrt)

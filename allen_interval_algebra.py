@@ -1,5 +1,8 @@
 class AllenIntervalRules(object):
-    """Assume that x, y are of tuples
+    """Temporal rules: evaluate temporal relations between
+        time intervals. Based on Allen's Interval Algebra:
+        https://www.ics.uci.edu/~alspaugh/cls/shr/allen.html.
+        Intervals x and y are tuples: (x_tstart, x_tend)
     """
     @staticmethod
     def containedby(x, y):
