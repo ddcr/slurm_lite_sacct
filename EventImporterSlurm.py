@@ -3,7 +3,7 @@
 # @Author: ddcr
 # @Date:   2017-04-10 20:15:22
 # @Last Modified by:   ddcr
-# @Last Modified time: 2017-06-09 16:33:58
+# @Last Modified time: 2017-06-13 17:15:55
 #
 # These snippets have been imported from HPCStats
 # (https://github.com/edf-hpc/hpcstats) with
@@ -20,7 +20,7 @@ import StringIO
 import os
 import logging
 import pandas as pd
-import numpy as np
+# import numpy as np
 from collections import defaultdict
 
 
@@ -835,7 +835,7 @@ def process_all_nodes_events(nodes_df, csvfile='cluster_events.csv'):
 if __name__ == '__main__':
     import cPickle as pickle
     from hostlist import pd_collect_hosts
-    import sys
+    from itertools import tee, izip
 
     events_pkl_file = 'dic_of_node_events.pkl'
     if not os.path.exists(events_pkl_file):
@@ -863,67 +863,136 @@ if __name__ == '__main__':
                    'engine': 'c',
                    'usecols': ['ts', 'te', 'node']}
 
-    csv_kw_wrt = {'header': False,
+    csv_kw_wrt = {'header': True,
                   'index': False,
-                  'na_rep': 'MISSING',
+                  # 'na_rep': 'MISSING',
                   'sep': '\t'}
 
-    with open(df_cluster_events_file, 'r') as fin:
+    if not os.path.exists('prova_2.csv'):
+        with open(df_cluster_events_file, 'r') as fin:
+            cluster_df = pd.read_csv(fin, **csv_kw_read)
+        cluster_df['ncpus'] = 8
+
+        csv_kw_wrt.update({'columns': ['ts', 'te', 'ncpus', 'node']})
+        cluster_df.to_csv('prova_1.csv', **csv_kw_wrt)
+
+        # Step 1: aggregate all duplicated ['ts', 'te'] columns
+        grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
+        cluster_df = grouper_dup.agg({'node': pd_collect_hosts,
+                                      'ncpus': sum})
+
+        # Step 2:
+        #  We are left with some near-duplicated values of 'te' for
+        #  each group of identical 'ts' values (differences of order of
+        #  one minute).
+        #  What follows is my attempt to identify those near-duplicated
+        #  values and change their values of 'te' to a common value.
+        #  This makes easy for latter aggregation of rows with same 'ts'
+        #  and 'te' (sure there is a cleaver way!)
+        dtmin = pd.Timedelta('15 minute')
+        grouper_near_dup = cluster_df.groupby('ts', as_index=False)
+        for _, grp in grouper_near_dup:
+            if len(grp) == 1:  # fine, next iteration
+                continue
+            te_ind = grp.te.index  # save indices of this group
+            te_len = len(te_ind)
+
+            # given value of 'te' build a list of rows with very close values
+            neighb_ind = [[] for a in range(te_len)]
+            for i in range(te_len):
+                i1 = i+1
+                dt = grp.loc[te_ind[i1:], 'te'] - grp.loc[te_ind[i], 'te']
+                dt = dt[dt < dtmin]  # collect only very close values
+                neighb_ind[i] = dt.index.tolist()
+
+            # sweep neighbours list and update values of 'te'
+            for i in range(te_len):
+                if len(neighb_ind[i]) > 0:
+                    te_indi = te_ind[i]
+                    te_indiv = cluster_df.loc[te_indi, 'te']
+                    cluster_df.loc[neighb_ind[i], 'te'] = te_indiv
+
+        # Step 3:
+        #   now we are in condition to aggregate again, like in Step 1
+        grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
+        cluster_df = grouper_dup.agg({'node': pd_collect_hosts,
+                                      'ncpus': sum})
+        cluster_df.to_csv('prova_2.csv', **csv_kw_wrt)
+
+    csv_kw_read.update({'usecols': ['ts', 'te', 'ncpus', 'node']})
+    with open('prova_2.csv', 'r') as fin:
         cluster_df = pd.read_csv(fin, **csv_kw_read)
 
-    csv_kw_wrt.update({'columns': ['ts', 'te', 'node']})
-    cluster_df.to_csv('prova_1.csv', **csv_kw_wrt)
+    if not os.path.exists('prova_3.csv'):
 
-    # Step 1: aggregate all duplicated ['ts', 'te'] columns
-    grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
-    cluster_df = grouper_dup.agg({'node': pd_collect_hosts})
-    cluster_df.to_csv('prova_2.csv', **csv_kw_wrt)
+        # eliminate all intervals smaller than 15 minutes
+        cluster_df = cluster_df.drop(
+            cluster_df[
+                (cluster_df.te-cluster_df.ts) < pd.Timedelta('15 minutes')
+            ].index)
 
-    # Step 2:
-    #  We are left with some near-duplicated values of 'te' for
-    #  each group of identical 'ts' values (differences of order of
-    #  one minute).
-    #  What follows is my attempt to identify those near-duplicated
-    #  values and change their values of 'te' to a common value.
-    #  This makes easy for latter aggregation of rows with same 'ts'
-    #  and 'te' (sure there is a cleaver way!)
-    dtmin = pd.Timedelta('15 minute')
-    grouper_near_dup = cluster_df.groupby('ts', as_index=False)
-    cluster_df['te_orig'] = cluster_df['te']
-    for _, grp in grouper_near_dup:
-        if len(grp) == 1:  # fine, next iteration
-            continue
-        te_ind = grp.te.index  # save indices of this group
-        te_len = len(te_ind)
+        # debug 1
+        cluster_df[['ts1', 'te1']] = cluster_df.shift(-1)[['ts', 'te']]
 
-        # given value of 'te' build a list of rows with very close values
-        neighb_ind = [[] for a in range(te_len)]
-        for i in range(te_len):
-            i1 = i+1
-            dt = grp.loc[te_ind[i1:], 'te'] - grp.loc[te_ind[i], 'te']
-            dt = dt[dt < dtmin]  # collect only very close values
-            neighb_ind[i] = dt.index.tolist()
+        def allen(x0, x1, y0, y1):
+            """ basic relations between time intervals:
+                only 6 are considered because columns are
+                time ordered
+            """
+            if x1 < y0:
+                """precedes"""
+                return pd.Series(['p', y0-x1])  # lag frac
+            elif (x1 == y0):
+                """meets"""
+                return pd.Series(['m', pd.Timedelta(0)])  # 0 lag
+            elif ((x0 < y0) & ((x1 > y0) & (x1 < y1))):
+                """overlaps"""
+                return pd.Series(['o', x1-y0])  # overlap frac
+            elif ((y1 == x1) & (y0 > x0)):
+                """finishedby"""
+                return pd.Series(['F', y0-x0])  # left non-overlap frac
+            elif ((y0 > x0) & (y1 < x1)):
+                """contains"""
+                return pd.Series(['D', x1-x0-(y1-y0)])  # non-overlap frac
+            elif ((x0 == y0) & (x1 < y1)):
+                """starts"""
+                return pd.Series(['s', y1-x1])  # right non-overlap frac
+            else:
+                return None
 
-        # sweep neighbours list and update values of 'te'
-        for i in range(te_len):
-            if len(neighb_ind[i]) > 0:
-                te_indi = te_ind[i]
-                te_indiv = cluster_df.loc[te_indi, 'te']
-                cluster_df.loc[neighb_ind[i], 'te'] = te_indiv
+        cluster_df[['order', 'lag']] = cluster_df[['ts', 'te',
+                                                   'ts1', 'te1']].apply(
+            lambda r: allen(r['ts'], r['te'],
+                            r['ts1'], r['te1']), axis=1)
+        csv_kw_wrt.update({'columns': ['ts', 'te', 'order',
+                                       'lag', 'ncpus', 'node']})
+        cluster_df.to_csv('prova_3.csv', **csv_kw_wrt)
 
-    cluster_df.to_csv('loga_3.csv', **csv_kw_wrt)
-    dt = cluster_df['te_orig']-cluster_df['te']
-    print '===> {0} {1}'.format(dt.min(), dt.max())
-    print '---> {0}'.format(len(dt[dt > dtmin]))
+    csv_kw_read.update({'usecols': ['ts', 'te', 'order', 'lag', 'ncpus'],
+                        'parse_dates': [0, 1, 3]})
+    with open('prova_3.csv', 'r') as fin:
+        cluster_df = pd.read_csv(fin, **csv_kw_read)
 
-    sys.exit(1)
-    # Step 3:
-    #   now we are in condition to aggregate again, like in Step 1
-    grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
-    cluster_df = grouper_dup.agg({'node': pd_collect_hosts})
-    cluster_df.to_csv('prova_3.csv', **csv_kw_wrt)
+    cluster_df['lag'] = pd.to_timedelta(cluster_df['lag'])
 
-    # debug 1
-    cluster_df['precede'] = cluster_df['te'] - cluster_df['ts'].shift(-1)
-    csv_kw_wrt.update({'columns': ['ts', 'te', 'precede']})
-    cluster_df.to_csv('prova_4.csv', **csv_kw_wrt)
+    def next_row(iterable):
+        a, b = tee(iterable)
+        next(b, None)
+        return izip(a, b)
+
+    to_delete = []
+    for (i, r), (i1, r_next) in next_row(cluster_df.iterrows()):
+        r_duration = (r.te-r.ts).seconds
+        r_next_duration = (r_next.te-r_next.ts).seconds
+        if r.order in ['F', 'D', 's']:
+            if (r_next_duration > r_duration):
+                print r.order, r.name, r.ts, r.te, r_next.ts, r_next.te
+        # if r.order == 'p':
+        #     if r.lag < pd.Timedelta('15 minute'):
+        #         r_next.ts = r.te  # unite the two intervals
+        #         if r.ncpus == r_next.ncpus:
+        #             to_delete.append(r.name)  # remove previous intv
+        # if r.order in ['F', 'D', 's']:
+        #     d = (r.te-r.ts).seconds
+        #     n = (r_next.te-r_next.ts).seconds
+        #     print r.order, r.name, r.ts, r.te, r_next.ts, r_next.te, d, n
