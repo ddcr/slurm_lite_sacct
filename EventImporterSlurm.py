@@ -3,7 +3,7 @@
 # @Author: ddcr
 # @Date:   2017-04-10 20:15:22
 # @Last Modified by:   ddcr
-# @Last Modified time: 2017-06-13 17:15:55
+# @Last Modified time: 2017-06-27 18:20:05
 #
 # These snippets have been imported from HPCStats
 # (https://github.com/edf-hpc/hpcstats) with
@@ -14,7 +14,7 @@
 import MySQLdb
 import _mysql_exceptions
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import ConfigParser
 import StringIO
 import os
@@ -22,6 +22,7 @@ import logging
 import pandas as pd
 # import numpy as np
 from collections import defaultdict
+import sys
 
 
 logging.basicConfig(filename='exemplo.log',
@@ -633,61 +634,60 @@ def read_all(pattern='trace_dir/veredas*.csv'):
     pass
 
 
-def test0(events):
-    """TEST0
+def allen(x0, x1, y0, y1):
+    """ basic relations between time intervals: pmoFDs+e
     """
-    import pprint
-
-    pp = pprint.PrettyPrinter(indent=4)
-    intervals = defaultdict(list)
-    for e in events:
-        ev_type = e.event_type
-        # exclude UNKNOWN event types (usually the reason is 'cold-start'
-        # and of very short duration time)
-        if ev_type in ['UNKNOWN']:
-            continue
-
-        start_time = e.start_datetime
-        end_time = e.end_datetime
-        dt = (end_time - start_time).total_seconds()
-        reason = e.reason
-        node = e.node.name
-
-        # mystr = ''.join(('Node={0} (Reason={1}) ',
-        #                  'Dur={2} Start={3} End={4}'))
-        # if reason in ['(null)', 'cold-start']:
-        #     print mystr.format(node, reason, dt, start_time, end_time
-
-        # intervals[dt].append((node, reason, start_time, end_time))
-        intervals[start_time].append((node, reason, dt))
-    pp.pprint(intervals)
+    if x1 < y0:
+        """precedes"""
+        return pd.Series(['p'])
+    elif (x1 == y0):
+        """meets"""
+        return pd.Series(['m'])
+    elif ((x0 < y0) & ((x1 > y0) & (x1 < y1))):
+        """overlaps"""
+        return pd.Series(['o'])
+    elif ((y1 == x1) & (y0 > x0)):
+        """finishedby"""
+        return pd.Series(['F'])
+    elif ((y0 > x0) & (y1 < x1)):
+        """contains"""
+        return pd.Series(['D'])
+    elif ((x0 == y0) & (x1 < y1)):
+        """starts"""
+        return pd.Series(['s'])
+    elif (x0 == y0) & (x1 == y1):
+        """equals"""
+        return pd.Series(['e'])
+    else:
+        return None
 
 
-def test1(events):
-    """TEST1
+def allen_converse(x0, x1, y0, y1):
+    """ basic relations between time intervals: converse relations
     """
-    edata = defaultdict(list)
-    for e in events:
-        ev_type = e.event_type
-        # if ev_type in ['UNKNOWN']:
-        #     continue
-        start_time = e.start_datetime
-        end_time = e.end_datetime
-        dt = (end_time - start_time).total_seconds()
-        node = e.node.name
+    if x0 > y1:
+        """preceded by"""
+        return pd.Series(['P'])
+    elif (y1 == x0):
+        """met by"""
+        return pd.Series(['M'])
+    elif ((y0 < x0) & ((y1 > x0) & (y1 < x1))):
+        """overlapped by"""
+        return pd.Series(['O'])
+    elif ((x1 == y1) & (x0 > y0)):
+        """finishes"""
+        return pd.Series(['f'])
+    elif ((x0 > y0) & (x1 < y1)):
+        """during"""
+        return pd.Series(['d'])
+    elif ((y0 == x0) & (y1 < x1)):
+        """started by"""
+        return pd.Series(['S'])
+    else:
+        return None
 
-        if ev_type in ['UNKNOWN']:
-                edata[dt].append(node)
 
-    for k in sorted(edata.iterkeys()):
-        # print 'dt = {0}'.format(k)
-        # for e in edata[k]:
-        #     print '\t {0}'.format(e)
-        k_1 = timedelta(seconds=k)
-        print '{0}: {1} ({2})'.format(k_1, 8*len(edata[k]), edata[k])
-
-
-def collect_events_to_df(events):
+def collect_events_to_dictofdf(events):
     """For each node collects the events into a convenient pandas DataFrame
         sorted by the starting time of the event.
         Merge all dataframes in a python dictionary.
@@ -702,6 +702,9 @@ def collect_events_to_df(events):
         end_time = e.end_datetime
         reason = e.reason
         node_name = e.node.name
+
+        if node_name == 'veredas57':
+            print start_time, end_time, ev_type, reason
 
         t = (start_time, end_time, 8, ev_type, reason)
 
@@ -727,115 +730,114 @@ def import_events_from_mysql(config):
     return(events)
 
 
-def df_merge_events(df_node):
-    """Merge events when their time spans intersect or touch
+def agglutinate(df_node, dt_lag_min=pd.Timedelta('1 hour')):
+    """Merge all overlapping intervals plus those that are
+    separated by less than dt_lag
+
+    Args:
+        df_node (TYPE): Ordered DataFrame of event time intervals
+        dt_lag (TYPE, optional): minimum separation between
+                                 consecutive event time intervals
     """
-    from allen_interval_algebra import AllenIntervalRules as allen
+    from operator import itemgetter
+    from itertools import groupby
+    pd.options.mode.chained_assignment = None  # default='warn'
 
-    lm1 = len(df_node)-1
-    indices_deleted = []
-    for i in xrange(lm1):
-        i1 = i+1
+    # < STEP 1 >
+    # Convert all close event intervals
+    # I have to change only the key p-> m and proceed to next step
+    null_index = df_node[df_node.isnull().any(axis=1)].index
 
-        a = tuple(df_node.iloc[i, [0, 1]])
-        b = tuple(df_node.iloc[i1, [0, 1]])
+    dt_lag = df_node.ts_n-df_node.te
+    condition = df_node.key.isin(['p']) & (dt_lag < dt_lag_min)
+    lag_index = df_node[condition].index
+    lag_index = lag_index.difference(null_index)
+    df_node.loc[lag_index, 'key'] = 'm'
 
-        if allen.takesplaceafter(a, b):
-            raise 'Sanity check: The DataFrame is not properly sorted'
+    # < STEP 2 >
+    # ============================================================
+    # CAUTION: I am assuming that df_node has consecutive indexes
+    #          i.e., RangeIndex(start=0, stop=..., step=1), a
+    #          monotonic ordered set (maybe it is not that relevant)
+    # ============================================================
+    # get indices of rows whose intervals overlap or touch
+    # (except last row which has NULL values)
+    ovl_index = df_node[~df_node.key.isin(['p'])].index  # operations: moFDs
+    ovl_index = ovl_index.difference(null_index)
 
-        # if allen.takesplacebefore(a, b):
-        #     dt = b[0] - a[1]
-        #     if dt < pd.Timedelta('1 minute'):
-        #         print 'too close'
-
-        for check_method in ['containedby', 'contains', 'finishedby',
-                             'finishes', 'isequalto', 'meets', 'metby',
-                             'overlapedby', 'overlaps', 'startedby',
-                             'starts']:
-            check = getattr(allen, check_method)
-
-            if check(a, b):
-                if check_method in ['meets', 'overlaps',
-                                    'finishedby', 'starts']:
-                    df_node.loc[i1, 'ts'] = df_node.loc[i, 'ts']
-                    df_node.loc[i1, 'key'] = 'ENLARGE'
-                    df_node.loc[i, 'key'] = 'DEL LATER'
-                    indices_deleted.append(i)
-                elif check_method == 'contains':
-                    df_node.loc[i1] = df_node.loc[i]
-                    df_node.loc[i1, 'key'] = 'CONTAINED: SURVIVAL'
-                    df_node.loc[i, 'key'] = 'CONTAINS: DEL LATER'
-                    indices_deleted.append(i)
-                else:
-                    raise NotImplementedError
-    # now remove rows and reindex
-    df_node.drop(df_node.index[indices_deleted], inplace=True)
+    for _, g in groupby(enumerate(ovl_index), lambda x: x[1]-x[0]):
+        ovl_slice = map(itemgetter(1), g)
+        # Complete list 'ovl_slice':
+        # -Add index element of DataFrame 'df_node' that follows ovl_slice[-1]
+        index_next_pos = df_node.index.get_loc(ovl_slice[-1])
+        # Complete 'ovl_slice'
+        ovl_slice.append(df_node.index[index_next_pos+1])
+        ts_min = df_node.loc[ovl_slice, 'ts'].min()
+        te_max = df_node.loc[ovl_slice, 'te'].max()
+        df_node.loc[ovl_slice[-1], ['ts', 'te']] = [ts_min, te_max]
+        df_node.drop(ovl_slice[:-1], inplace=True)   # delete slice
 
 
-def process_all_nodes_events(nodes_df, csvfile='cluster_events.csv'):
-    """Work out all nodes events
+def collect_events_from_nodes(nodes_df,
+                              csvfile='cluster_events.csv',
+                              dtmin=pd.Timedelta('1 minute')):
+    """Given a dictionary of node DataFrames, do some pre-processing
+       before merging all event in one big dataframe fro the whole cluster.
+
+    Args:
+        nodes_df (Dict): Dictionary of node Dataframe
+        csvfile (str, optional): CSV of the cluster DataFrame
+        dtmin (Timedelta, optional): Minimum time interval allowed
     """
     import natsort
 
-    tdelta_bins = [pd.Timedelta(0), pd.Timedelta('1 minute'),
-                   pd.Timedelta('1 hour'), pd.Timedelta('1 day'),
-                   pd.Timedelta('7 days'), pd.Timedelta('30 days'),
-                   pd.Timedelta('60 days')]
-    tdelta_categories = ['<1m', '<1h', '<1d', '<1w', '<30d', '<60d']
-
-    csvfile_orig = '{}.orig.csv'.format(csvfile[:-4])
-    csv_kw = {
-        'mode': 'a',
-        'header': False,
-        'columns': ['ts', 'te', 'node', 'reason', 'key'],
+    csvfile_untouched = '{}.preproc.csv'.format(csvfile[:-4])
+    csv_kw_wrt = {
+        'columns': ['ts', 'te', 'node', 'reason'],
         'sep': '\t'
     }
 
-    traces_dir = 'traces_dir'
-    if not os.path.exists(traces_dir):
-        os.makedirs(traces_dir)
-
     all_df_nodes = []
+    cols = ['ts', 'te', 'ts_n', 'te_n']
     for node_name in natsort.natsorted(nodes_df.iterkeys()):
-        print '{}'.format(node_name)
-
-        # == determine event duration
         df_node = nodes_df[node_name]
-        diff_tv = df_node.te-df_node.ts
-        # == do binning
-        df_node['dt'] = pd.cut(diff_tv,
-                               bins=tdelta_bins,
-                               labels=tdelta_categories)
-        # internal key used for debugging
-        df_node['key'] = 'OK'
         df_node['node'] = node_name
 
-        # == remove events with duration less than one minute
-        df_node = df_node[~(df_node.dt == '<1m')]
+        # remove very short events (~ dtmin): reset index of df
+        df_node = df_node[~(df_node.te-df_node.ts < dtmin)]
         df_node.reset_index(inplace=True, drop=True)
-        # append all dataframes for debugging
-        df_node.to_csv(csvfile_orig, **csv_kw)
 
-        # == Now merge/delete events in the timeline
-        df_merge_events(df_node)
+        # csv_kw_wrt.update({'header': True, 'mode': 'a'})
+        # df_node.to_csv(csvfile_untouched, **csv_kw_wrt)
+
+        # === merge events ===
+        df_node[['ts_n', 'te_n']] = df_node.shift(-1)[['ts', 'te']]
+        df_node[['key']] = df_node[cols].apply(
+            lambda r: allen(r.ts, r.te, r.ts_n, r.te_n), axis=1)
+
+        # --PLOT--
+        # csv_kw_wrt.update({'columns': ['ts', 'te', 'key', 'reason']})
+        # df_node.to_csv('ola-{}.csv'.format(node_name), **csv_kw_wrt)
+        # --PLOT--
+        # print 'Node: {}'.format(node_name)
+        agglutinate(df_node)
+        # print '='*80
+
+        # --PLOT--
+        # df_node.to_csv('ola-{}.n.csv'.format(node_name), **csv_kw_wrt)
+        # --PLOT--
+
         all_df_nodes.append(df_node)
-
-        # == create CSV file for each node in order to check
-        # == the package traces
-        traces_file = os.path.join(traces_dir, '{}.csv'.format(node_name))
-        df_node.to_csv(traces_file, **csv_kw)
 
     df_cluster = pd.concat(all_df_nodes)
     df_cluster.sort_values(['ts', 'te'], inplace=True)
-    # sort df_cluster wrt ts and te columns
-    csv_kw['header'] = True
-    df_cluster.to_csv(csvfile, **csv_kw)
+    csv_kw_wrt.update({'header': True, 'mode': 'w'})
+    df_cluster.to_csv(csvfile, **csv_kw_wrt)
 
 
 if __name__ == '__main__':
     import cPickle as pickle
-    from hostlist import pd_collect_hosts
-    from itertools import tee, izip
+    from hostlist import pd_collect_hosts, expand_hostlist
 
     events_pkl_file = 'dic_of_node_events.pkl'
     if not os.path.exists(events_pkl_file):
@@ -845,7 +847,7 @@ if __name__ == '__main__':
         config.read()
 
         events = import_events_from_mysql(config)
-        nodes_df = collect_events_to_df(events)
+        nodes_df = collect_events_to_dictofdf(events)
 
         with open(events_pkl_file, 'wb') as fout:
             pickle.dump(nodes_df, fout)
@@ -855,144 +857,127 @@ if __name__ == '__main__':
 
     df_cluster_events_file = 'cluster_events.csv'
     if not os.path.exists(df_cluster_events_file):
-        process_all_nodes_events(nodes_df, df_cluster_events_file)
+        collect_events_from_nodes(nodes_df, df_cluster_events_file)
 
     csv_kw_read = {'infer_datetime_format': True,
                    'parse_dates': [0, 1],
                    'delimiter': '\t',
                    'engine': 'c',
                    'usecols': ['ts', 'te', 'node']}
-
     csv_kw_wrt = {'header': True,
                   'index': False,
-                  # 'na_rep': 'MISSING',
                   'sep': '\t'}
 
-    if not os.path.exists('prova_2.csv'):
+    if not os.path.exists('prova_1.2.csv'):
         with open(df_cluster_events_file, 'r') as fin:
             cluster_df = pd.read_csv(fin, **csv_kw_read)
-        cluster_df['ncpus'] = 8
 
-        csv_kw_wrt.update({'columns': ['ts', 'te', 'ncpus', 'node']})
+        csv_kw_wrt.update({'columns': ['ts', 'te', 'node']})
         cluster_df.to_csv('prova_1.csv', **csv_kw_wrt)
 
-        # Step 1: aggregate all duplicated ['ts', 'te'] columns
+        # < STEP 0 >:
+        # Aggregate identical time intervals
         grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
-        cluster_df = grouper_dup.agg({'node': pd_collect_hosts,
-                                      'ncpus': sum})
+        cluster_df = grouper_dup.agg({'node': pd_collect_hosts})
+        cluster_df.to_csv('prova_1.1.csv', **csv_kw_wrt)
 
-        # Step 2:
-        #  We are left with some near-duplicated values of 'te' for
-        #  each group of identical 'ts' values (differences of order of
-        #  one minute).
-        #  What follows is my attempt to identify those near-duplicated
-        #  values and change their values of 'te' to a common value.
-        #  This makes easy for latter aggregation of rows with same 'ts'
-        #  and 'te' (sure there is a cleaver way!)
-        dtmin = pd.Timedelta('15 minute')
-        grouper_near_dup = cluster_df.groupby('ts', as_index=False)
-        for _, grp in grouper_near_dup:
-            if len(grp) == 1:  # fine, next iteration
+        # < STEP 1 >:
+        # There are time intervals almost equal, ie, with same (ts, te).
+        # Find these intervals and set them equal
+        # grp_ts = cluster_df.groupby('ts', as_index=False)
+        grp_ts = cluster_df.groupby(['ts', cluster_df.te.dt.date],
+                                    as_index=False)
+        for ts_lbl, ts_slice in grp_ts.groups.items():  # this is a dict
+            if len(ts_slice) == 1:
                 continue
-            te_ind = grp.te.index  # save indices of this group
-            te_len = len(te_ind)
-
-            # given value of 'te' build a list of rows with very close values
-            neighb_ind = [[] for a in range(te_len)]
-            for i in range(te_len):
-                i1 = i+1
-                dt = grp.loc[te_ind[i1:], 'te'] - grp.loc[te_ind[i], 'te']
-                dt = dt[dt < dtmin]  # collect only very close values
-                neighb_ind[i] = dt.index.tolist()
-
-            # sweep neighbours list and update values of 'te'
-            for i in range(te_len):
-                if len(neighb_ind[i]) > 0:
-                    te_indi = te_ind[i]
-                    te_indiv = cluster_df.loc[te_indi, 'te']
-                    cluster_df.loc[neighb_ind[i], 'te'] = te_indiv
-
-        # Step 3:
-        #   now we are in condition to aggregate again, like in Step 1
+            te_values = cluster_df.loc[ts_slice, 'te']
+            te_values_max = te_values.max()
+            dte = te_values.max()-te_values.min()
+            if (dte < pd.Timedelta('1 day')):
+                cluster_df.loc[ts_slice, 'te'] = te_values_max
+        # Now aggregate
         grouper_dup = cluster_df.groupby(['ts', 'te'], as_index=False)
-        cluster_df = grouper_dup.agg({'node': pd_collect_hosts,
-                                      'ncpus': sum})
-        cluster_df.to_csv('prova_2.csv', **csv_kw_wrt)
+        cluster_df = grouper_dup.agg({'node': pd_collect_hosts})
+        cluster_df.to_csv('prova_1.2.csv', **csv_kw_wrt)
 
-    csv_kw_read.update({'usecols': ['ts', 'te', 'ncpus', 'node']})
-    with open('prova_2.csv', 'r') as fin:
+    csv_kw_read.update({'usecols': ['ts', 'te', 'node']})
+    with open('prova_1.2.csv', 'r') as fin:
         cluster_df = pd.read_csv(fin, **csv_kw_read)
 
-    if not os.path.exists('prova_3.csv'):
+    # remove events with duration less than 6 hours (1/4 day)
+    dt = cluster_df.te-cluster_df.ts
+    cluster_df = cluster_df[~(dt < pd.Timedelta('6 hours'))]
 
-        # eliminate all intervals smaller than 15 minutes
-        cluster_df = cluster_df.drop(
-            cluster_df[
-                (cluster_df.te-cluster_df.ts) < pd.Timedelta('15 minutes')
-            ].index)
+    ts_min = cluster_df.ts.min()
+    te_max = cluster_df.te.max()
 
-        # debug 1
-        cluster_df[['ts1', 'te1']] = cluster_df.shift(-1)[['ts', 'te']]
+    # bin edges (duration = 1 day)
+    result = pd.Series(0, index=pd.date_range(ts_min.floor('D'),
+                                              te_max.ceil('D'),
+                                              freq='D'))
+    cluster_df['bin_ts'] = cluster_df.ts.dt.floor('D')
+    cluster_df['bin_te'] = cluster_df.te.dt.floor('D')
 
-        def allen(x0, x1, y0, y1):
-            """ basic relations between time intervals:
-                only 6 are considered because columns are
-                time ordered
-            """
-            if x1 < y0:
-                """precedes"""
-                return pd.Series(['p', y0-x1])  # lag frac
-            elif (x1 == y0):
-                """meets"""
-                return pd.Series(['m', pd.Timedelta(0)])  # 0 lag
-            elif ((x0 < y0) & ((x1 > y0) & (x1 < y1))):
-                """overlaps"""
-                return pd.Series(['o', x1-y0])  # overlap frac
-            elif ((y1 == x1) & (y0 > x0)):
-                """finishedby"""
-                return pd.Series(['F', y0-x0])  # left non-overlap frac
-            elif ((y0 > x0) & (y1 < x1)):
-                """contains"""
-                return pd.Series(['D', x1-x0-(y1-y0)])  # non-overlap frac
-            elif ((x0 == y0) & (x1 < y1)):
-                """starts"""
-                return pd.Series(['s', y1-x1])  # right non-overlap frac
-            else:
-                return None
+    csv_kw_wrt.update({'columns': ['ts', 'bin_ts', 'te', 'te_bin', 'node']})
+    # csv_kw_wrt.update({'columns': ['ts', 'te', 'node']})
+    cluster_df.to_csv('prova_1.3.csv', **csv_kw_wrt)
 
-        cluster_df[['order', 'lag']] = cluster_df[['ts', 'te',
-                                                   'ts1', 'te1']].apply(
-            lambda r: allen(r['ts'], r['te'],
-                            r['ts1'], r['te1']), axis=1)
-        csv_kw_wrt.update({'columns': ['ts', 'te', 'order',
-                                       'lag', 'ncpus', 'node']})
-        cluster_df.to_csv('prova_3.csv', **csv_kw_wrt)
+    # result.to_csv('series.csv')
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    sys.exit(1)
 
-    csv_kw_read.update({'usecols': ['ts', 'te', 'order', 'lag', 'ncpus'],
-                        'parse_dates': [0, 1, 3]})
-    with open('prova_3.csv', 'r') as fin:
-        cluster_df = pd.read_csv(fin, **csv_kw_read)
+    # remove all intervals less than 2/3 day
+    dt = cluster_df.te-cluster_df.ts
+    cluster_df = cluster_df[~(dt < pd.Timedelta('16 hours'))]
 
-    cluster_df['lag'] = pd.to_timedelta(cluster_df['lag'])
+    # < STEP 1>:
+    # group values by day
+    # extract date field from 'ts', 'te' and sort values
+    cluster_df[['te', 'ts']] = cluster_df[['te', 'ts']].transform(
+        lambda r: pd.to_datetime(r.dt.date))
+    cluster_df.sort_values(['ts', 'te'], inplace=True)
 
-    def next_row(iterable):
-        a, b = tee(iterable)
-        next(b, None)
-        return izip(a, b)
+    # -- PLOT
+    csv_kw_wrt.update({'columns': ['ts', 'te', 'node']})
+    cluster_df.to_csv('prova_1.3.csv', **csv_kw_wrt)
 
-    to_delete = []
-    for (i, r), (i1, r_next) in next_row(cluster_df.iterrows()):
-        r_duration = (r.te-r.ts).seconds
-        r_next_duration = (r_next.te-r_next.ts).seconds
-        if r.order in ['F', 'D', 's']:
-            if (r_next_duration > r_duration):
-                print r.order, r.name, r.ts, r.te, r_next.ts, r_next.te
-        # if r.order == 'p':
-        #     if r.lag < pd.Timedelta('15 minute'):
-        #         r_next.ts = r.te  # unite the two intervals
-        #         if r.ncpus == r_next.ncpus:
-        #             to_delete.append(r.name)  # remove previous intv
-        # if r.order in ['F', 'D', 's']:
-        #     d = (r.te-r.ts).seconds
-        #     n = (r_next.te-r_next.ts).seconds
-        #     print r.order, r.name, r.ts, r.te, r_next.ts, r_next.te, d, n
+    # group by days
+    grouper_day = cluster_df.groupby(['ts', 'te'], as_index=False)
+    cluster_df = grouper_day.agg({'node': pd_collect_hosts})
+
+    # -- PLOT
+    csv_kw_wrt.update({'columns': ['ts', 'te', 'node']})
+    cluster_df.to_csv('prova_1.4.csv', **csv_kw_wrt)
+
+    # result = pd.Series('', index=pd.date_range(cluster_df.ts.min(),
+    #                                            cluster_df.te.max(),
+    #                                            freq='D'))
+    # for r in cluster_df.itertuples():
+    #     print r.ts, r.te, r.node
+    #     print result.loc[r.ts:r.te].index
+    #     print '.'*80
+
+    # for r in cluster_df.itertuples():
+    #     for ind in result.loc[r.ts:r.te].index:
+    #         result[ind] = pd_collect_hosts([r.node, result[ind]])
+    # result = result.transform(lambda x: len(expand_hostlist(x)))
+    # result.to_csv('series.csv')
+
+    # check date ordering
+    cols = ['ts', 'te', 'ts_n', 'te_n']
+    from_col = ['ts', 'te']
+    to_col = ['ts_n', 'te_n']
+    cluster_df[to_col] = cluster_df.shift(-1)[from_col]
+    cluster_df[['key']] = cluster_df[cols].apply(
+        lambda r: allen(r.ts, r.te, r.ts_n, r.te_n), axis=1)
+
+    print cluster_df.key.unique()
+    # # dt1 = cluster_df.te-cluster_df.ts
+    # # dt2 = cluster_df.te_n-cluster_df.ts_n
+    # # cluster_df['dt'] = abs(dt2.dt.total_seconds()-dt1.dt.total_seconds())
+
+    # cluster_df_o = cluster_df[cluster_df.key == 'o']
+    # print cluster_df_o.te-cluster_df_o.ts_n
+
+    csv_kw_wrt.update({'columns': ['ts', 'te', 'key', 'node']})
+    cluster_df.to_csv('prova_1.5.csv', **csv_kw_wrt)

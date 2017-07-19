@@ -136,17 +136,15 @@ def compstats(csvfile, df, **kwargs):
     """
 
     dfout = pd.DataFrame()
-    for field in ['jobid', 'user', 'account', 'submit', 'submit',
-                  'eligible', 'start', 'end', 'elapsed', 'state']:
-        dfout[field] = df[field]
+    # make sure 'jobid' is of type object. this is
+    # to avoid errors later on when saving H5 file
+    # dfout['jobid'] = df.jobid.astype(str)
+    cols = ['jobid', 'user', 'account',
+            'submit', 'eligible', 'start', 'end', 'elapsed',
+            'state', 'nnodes', 'ncpus']
+    dfout = df[cols].copy()
     dfout['tqueue'] = df['eligible']-df['submit']
-    dfout = dfout[dfout['tqueue'] > pd.Timedelta(days=1,
-                                                 seconds=0,
-                                                 microseconds=0,
-                                                 milliseconds=0,
-                                                 minutes=0,
-                                                 hours=0,
-                                                 weeks=0)]
+
     return(dfout)
 
 
@@ -264,9 +262,6 @@ def parse_log_process(fn, csvfile, **kwargs):
     except KeyError:
         convert = False
 
-    if csvfile.endswith('old.log'):
-        return(csvfile, pd.DataFrame())
-
     if convert:
         csv_kw['converters'] = {'elapsed': reformat_timedelta_string}
 
@@ -321,6 +316,7 @@ def str2func(ctx, param, value):
 def run_concurrent(task, by, ascending, convert, rootdir):
     """
         Parallel scan/processing of a directory with SLURM logfiles
+        All csv files are gathered into a single file called all.blosc.h5
     """
     import concurrent.futures
     from concurrent.futures import ThreadPoolExecutor
@@ -342,6 +338,12 @@ def run_concurrent(task, by, ascending, convert, rootdir):
     allfiles = []
     for root, dirs, files in scandir.walk(rootdir):
         for file_name in files:
+            if file_name.endswith(".old.log"):
+                continue
+            # discard empty files
+            with open(os.path.join(root, file_name)) as fd:
+                if not fd.read(1):
+                    continue
             if file_name.endswith(".log"):
                 allfiles.append(os.path.join(root, file_name))
 
@@ -360,16 +362,27 @@ def run_concurrent(task, by, ascending, convert, rootdir):
                 print('Main: {0} {1}'.format(f, res[0]))
             else:
                 print('Main: error: {0} {1}'.format(f, error))
+
     reduced_df = pd.concat(reduce_results)
+
     if len(by) > 0:
         by = list(by)
         print 'Sorting reduced DataFrame'
         reduced_df.sort_values(inplace=True, by=by, ascending=ascending)
+
+    print reduced_df.info()
+
     reduced_df.to_csv('reduced_results.csv',
                       sep='|',
                       header=False,
                       index=False,
                       date_format='%Y-%m-%dT%H:%M:%S')
+
+    store = pd.HDFStore('reduced_results.blosc.h5',
+                        complevel=9,
+                        complib='blosc')
+    store.put('df', reduced_df, format='table')
+    store.close()
 
 
 @cli.command()

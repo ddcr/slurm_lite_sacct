@@ -461,7 +461,16 @@ if __name__ == '__main__':
 
     # this does not work
     # print flatten(['veredas2', ['veredas[100-120]']])
-    print pd_collect_hosts(['veredas2', 'veredas[16-35]'])
-    print pd_collect_hosts(['veredas[2-3]', 'veredas[16-35]'])
-    print pd_collect_hosts(['veredas2', 'veredas16'])
-    print pd_collect_hosts(['veredas2'])
+    statements = ["pd_collect_hosts(['veredas2', 'veredas[16-35]'])",
+                  "pd_collect_hosts(['veredas[2-3]', 'veredas[16-35]'])",
+                  "pd_collect_hosts(['veredas2', 'veredas16'])",
+                  "pd_collect_hosts(['veredas2'])",
+                  "pd_collect_hosts(['veredas76', 'veredas[2-107]'])",
+                  "pd_collect_hosts(['veredas76', ''])",
+                  "pd_collect_hosts(['veredas[67-76]', ''])",
+                  ]
+    for st in statements:
+        out = eval(st)
+        print '{0} := {1}'.format(st, out)
+        len_hostlist = len(expand_hostlist(out))
+        print 'nhosts = {}'.format(len_hostlist)

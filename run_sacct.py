@@ -242,14 +242,14 @@ def use_multiprocessing():
     tp.join()
 
 
-def use_concurrent():
+def use_concurrent(list_of_years=[2011, 2012, 2013, 2014, 2015, 2016, 2017]):
     import concurrent.futures
     # from concurrent.futures import ThreadPoolExecutor
     from concurrent.futures import ProcessPoolExecutor
 
     cmd_sacct = get_sacct_cmd()
     kwds = {'sacct_fmt': cmd_sacct}
-    for y in [2011, 2012, 2013, 2014, 2015, 2016, 2017]:
+    for y in list_of_years:
         #
         # First create the output directory
         outdir = './sacct_outputs/slurm-{0}'.format(y)
@@ -265,7 +265,7 @@ def use_concurrent():
                 sys.exit(1)
 
         if y == 2017:
-            month_upper = 5
+            month_upper = 7
         else:
             month_upper = 13
 
@@ -331,6 +331,14 @@ def extract_sql_from_errfiles(root_path):
 if __name__ == '__main__':
     """
     """
+    # for y in [2011, 2012, 2013, 2014, 2015, 2016, 2017]:
+    #     year_range = [get_month_day_range(datetime.datetime(year=y,
+    #                                                         month=m,
+    #                                                         day=1))
+    #                   for m in range(1, 13)
+    #                   ]
+    #     for dx in year_range:
+    #         print dx
     use_concurrent()
     # extract_sql_from_errfiles("sacct_outputs_no_dupes")
     # extract_sql_from_errfiles("sacct_outputs")
