@@ -1652,6 +1652,8 @@ char **env_array_user_default(const char *username, int timeout, int mode)
 	if (stat("/bin/echo", &buf))
 		fatal("Could not locate command: /bin/echo");
 	if (stat(stepd_path, &buf) == 0) {
+		/* ddcr patch 05-11-2020  (not used!) */
+		// xstrcat(stepd_path, " getenv");
 		snprintf(name, sizeof(name), "%s getenv", stepd_path);
 		env_loc = name;
 	} else if (stat("/bin/env", &buf) == 0)

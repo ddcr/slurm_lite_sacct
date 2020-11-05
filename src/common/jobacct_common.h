@@ -53,6 +53,8 @@
 #  include <inttypes.h>
 #endif
 
+/* ddcr 04-11-2020 */
+#include <sys/resource.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
